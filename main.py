@@ -1,11 +1,14 @@
 from flask import Flask, request
+from settings import LOCAL, SECRET_KEY
+import json
 import os
 
 app = Flask(__name__)
 
 @app.route("/webhook", methods=["POST"])
 def hook():
-    print(request.data)
+    data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
+    print(f"Received data: {data}")
     return "Hello, world!"
 
 
