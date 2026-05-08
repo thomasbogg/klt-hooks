@@ -5,11 +5,18 @@ import os
 
 app = Flask(__name__)
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/test", methods=["POST"])
 def hook():
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
     print(f"Received data: {data}")
     return "Hello, world!"
+
+
+@app.route("/wisecallback", methods=["POST"])
+def wisecallback():
+    data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
+    print(f"Received data: {data}")
+    return "Wise Money In contact received!"
 
 
 if __name__ == "__main__":
