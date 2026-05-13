@@ -19,6 +19,13 @@ def wisecallback():
     return "Wise Money In contact received!"
 
 
+@app.route("/revolutcallback", methods=["POST"])
+def revolutcallback():
+    data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
+    print(f"Received data: {data}")
+    return "Revolut contact received!"
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
