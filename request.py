@@ -1,16 +1,20 @@
 import json
 import requests
-from settings import REVOLUT_SECRET_KEY
-#
-#url = 'https://klt-hooks.up.railway.app/webhook'
-#
-#headers = {
-#    "Authorization": f"Bearer {SECRET_KEY}"
-#}
-#
-#r = requests.post(url, data=json.dumps({"message": "This is the data"}), headers=headers)
-#print(r.content)
-#
+from settings import REVOLUT_SECRET_KEY, KLT_SECRET_KEY
+
+def send_test_request():
+  
+  url = 'https://klt-hooks.up.railway.app/revolutcallback'
+  
+  headers = {
+      "Authorization": f"Bearer {KLT_SECRET_KEY}"
+  }
+  
+  response = requests.post(url, data=json.dumps({"message": "This is the data"}), headers=headers)
+  print(response.content)
+  print(response.status_code)
+  print(response.text)
+  
 
 
 def create_revolut_webhook():
@@ -58,4 +62,4 @@ def post_request(url, data, secret_key):
 
 
 if __name__ == "__main__":
-  create_revolut_payment_order()
+  send_test_request()
