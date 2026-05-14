@@ -62,4 +62,4 @@ def post_request(url, data, secret_key):
 
 
 if __name__ == "__main__":
-  create_revolut_payment_order()
+  send_test_request()
