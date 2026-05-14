@@ -4,7 +4,7 @@ from settings import REVOLUT_SECRET_KEY, KLT_SECRET_KEY
 
 def send_test_request():
   
-  url = 'https://klt-hooks.up.railway.app/revolutcallback'
+  url = 'https://klt-hooks.up.railway.app/test'
   
   headers = {
       "Authorization": f"Bearer {KLT_SECRET_KEY}"
@@ -62,4 +62,4 @@ def post_request(url, data, secret_key):
 
 
 if __name__ == "__main__":
-  send_test_request()
+  create_revolut_payment_order()
