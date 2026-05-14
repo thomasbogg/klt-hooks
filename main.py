@@ -24,7 +24,7 @@ def wisecallback():
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
-    headers = request.headers
+    headers = json.loads(request.headers)
     if data['event'] == 'ORDER_AUTHORISED':
         user, message = new_email_to_self(subject = "Revolut order authorised")
     # 'event': 'ORDER_AUTHORISED', 'order_id': '6a05fb0c-d53e-a0fb-b8f5-854b9a51bc33'

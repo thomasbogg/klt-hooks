@@ -1,6 +1,6 @@
 import json
 import requests
-from settings import REVOLUT_SECRET_KEY, KLT_SECRET_KEY
+from settings import REVOLUT_API_VERSION, REVOLUT_SECRET_KEY, KLT_SECRET_KEY
 
 def send_test_request():
   
@@ -51,7 +51,7 @@ def generate_request_headers(secret_key = None):
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     'Authorization': f'Bearer {secret_key}',
-    'Revolut-Api-Version': '2025-12-04',
+    'Revolut-Api-Version': REVOLUT_API_VERSION,
   }
 
 

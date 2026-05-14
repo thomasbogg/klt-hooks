@@ -34,7 +34,7 @@ else:
     )
 
 
-class ThomasAtABA(GoogleAccount):
+class KLTGoogleAccount(GoogleAccount):
     """
     Google Account for Thomas at Algarve Beach Apartments.
     

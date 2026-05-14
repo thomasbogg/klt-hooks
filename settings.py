@@ -14,7 +14,10 @@ except Exception:
 
 
 KLT_SECRET_KEY = os.getenv('KLT_SECRET_KEY')
+
+# REVOLUT credentials
 REVOLUT_SECRET_KEY = os.getenv('REVOLUT_API_SECRET_KEY')
+REVOLUT_API_VERSION = os.getenv('REVOLUT_API_VERSION')
 
 # Default account for API operations
 DEFAULT_ACCOUNT = ThomasAtABA()
