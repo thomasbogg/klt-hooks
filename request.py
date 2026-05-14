@@ -16,17 +16,17 @@ from settings import REVOLUT_SECRET_KEY
 def create_revolut_webhook():
   url = "https://sandbox-merchant.revolut.com/api/webhooks"
 
-  payload = json.dumps({
+  payload = {
     "url": "https://klt-hooks.up.railway.app/revolutcallback",
     "events": [
       "ORDER_COMPLETED",
       "ORDER_AUTHORISED"
     ]
-  })
+  }
   post_request(url, payload, REVOLUT_SECRET_KEY)
 
 
-def create_revolut_payment_order(description = None, full_name = None, email = None, phone = None, amount = 28):
+def create_revolut_payment_order(description = None, full_name = None, email = None, phone = None, amount = 2400):
   url = "https://sandbox-merchant.revolut.com/api/orders"
   
   payload = ({

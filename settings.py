@@ -1,5 +1,7 @@
 import os
 
+from default.google.accounts import ThomasAtABA
+
 try:
     # Check if running in deployed environment (e.g., on a server) 
     # where environment variables are set directly
@@ -13,3 +15,6 @@ except Exception:
 
 KLT_SECRET_KEY = os.getenv('KLT_SECRET_KEY')
 REVOLUT_SECRET_KEY = os.getenv('REVOLUT_API_SECRET_KEY')
+
+# Default account for API operations
+DEFAULT_ACCOUNT = ThomasAtABA()
