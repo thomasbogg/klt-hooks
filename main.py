@@ -1,5 +1,5 @@
 from flask import Flask, request
-from settings import LOCAL, SECRET_KEY
+from settings import LOCAL, KLT_SECRET_KEY
 import json
 import os
 
