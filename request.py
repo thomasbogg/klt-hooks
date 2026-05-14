@@ -1,6 +1,6 @@
-#import requests
-#import json
-#from settings import SECRET_KEY
+import json
+import requests
+from settings import REVOLUT_SECRET_KEY
 #
 #url = 'https://klt-hooks.up.railway.app/webhook'
 #
@@ -11,24 +11,51 @@
 #r = requests.post(url, data=json.dumps({"message": "This is the data"}), headers=headers)
 #print(r.content)
 #
-import requests
-import json
 
-url = "https://sandbox-merchant.revolut.com/api/webhooks"
 
-payload = json.dumps({
-  "url": "https://example.com/webhooks",
-  "events": [
-    "ORDER_COMPLETED",
-    "ORDER_AUTHORISED"
-  ]
-})
-headers = {
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-  'Authorization': 'Bearer <yourSecretApiKey>'
-}
+def create_revolut_webhook():
+  url = "https://sandbox-merchant.revolut.com/api/webhooks"
 
-response = requests.request("POST", url, headers=headers, data=payload)
+  payload = json.dumps({
+    "url": "https://klt-hooks.up.railway.app/revolutcallback",
+    "events": [
+      "ORDER_COMPLETED",
+      "ORDER_AUTHORISED"
+    ]
+  })
+  post_request(url, payload, REVOLUT_SECRET_KEY)
 
-print(response.text)
+
+def create_revolut_payment_order(description = None, full_name = None, email = None, phone = None, amount = 28):
+  url = "https://sandbox-merchant.revolut.com/api/orders"
+  
+  payload = ({
+    'amount': amount,
+    'currency': 'EUR',
+    'description': 'Test payment',
+    'customer': {
+      'email': 'thomasbogg@gmail.com',
+      'phone': '+351 935 769 935',
+      'full_name': 'Thomas Bogg'
+    },
+  })
+  post_request(url, payload, REVOLUT_SECRET_KEY)
+
+
+def generate_request_headers(secret_key = None):
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': f'Bearer {secret_key}',
+    'Revolut-Api-Version': '2025-12-04',
+  }
+
+
+def post_request(url, data, secret_key):
+  headers = generate_request_headers(secret_key)
+  response = requests.request("POST", url, headers=headers, json=data)
+  print(response.text)
+
+
+if __name__ == "__main__":
+  create_revolut_payment_order()

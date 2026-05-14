@@ -11,4 +11,5 @@ except Exception:
     LOCAL: bool = os.getenv('LOCAL').lower() == 'true'
 
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+KLT_SECRET_KEY = os.getenv('KLT_SECRET_KEY')
+REVOLUT_SECRET_KEY = os.getenv('REVOLUT_API_SECRET_KEY')
