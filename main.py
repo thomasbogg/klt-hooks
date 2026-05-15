@@ -4,6 +4,7 @@ from flask import Flask, Request, request
 import json
 import os
 from werkzeug.datastructures import Headers
+from revolut import process_revolut_callback
 from wrapper import update
 
 app = Flask(__name__)
@@ -24,32 +25,26 @@ def wisecallback():
     return "Wise Money In contact received!"
 
 
-@update
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
     headers = request.headers
     raw_data = request.data
-    data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON
     
-    signing_secret, timestamp, payload_to_sign, signature, isRevolut = verify_revolut_payload_signature(headers, raw_data)
+    isRevolut = verify_revolut_payload_signature(headers, raw_data)
+    if not isRevolut:
+        user, message = new_email_to_self(subject = "Invalid Revolut contact received")
+        message.body.paragraph(f"Received headers: {headers}")
+        message.body.paragraph(f"Received data: {raw_data}")
+        send_email_to_self(user, message)
+        return "Invalid Revolut contact received!", 400
+    
+    data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON
 
-    if data['event'] == 'ORDER_AUTHORISED':
-        user, message = new_email_to_self(subject = "Revolut order authorised")
-   
-    # 'event': 'ORDER_AUTHORISED', 'order_id': '6a05fb0c-d53e-a0fb-b8f5-854b9a51bc33'
-    elif data['event'] == 'ORDER_COMPLETED':
-        user, message = new_email_to_self(subject = "Revolut order completed")
-   
-    message.body.paragraph(f"Received headers: {headers}")
-    message.body.paragraph(f"Received data: {data}")
-    message.body.paragraph(f"Signing secret: {signing_secret}")
-    message.body.paragraph(f"Timestamp: {timestamp}")
-    message.body.paragraph(f"Payload to sign: {payload_to_sign}")
-    message.body.paragraph(f"Generated signature: {signature}")
-    message.body.paragraph(f"Is valid Revolut signature: {isRevolut}")
-    send_email_to_self(user, message)
-   
-    return "Revolut contact received!"
+    if not data['event'] == 'ORDER_COMPLETED':
+        return 400
+    
+    process_revolut_callback(data)
+    return 400
 
 
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes) -> bool:

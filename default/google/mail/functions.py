@@ -10,8 +10,9 @@ from libraries.google.mail.utils import (
     get_google_mail_user,
     get_refreshed_google_mail_connection
 )
-from libraries.dates import dates
-from settings import DEFAULT_ACCOUNT
+from default.booking.booking import Booking
+from default.dates import dates
+from default.settings import DEFAULT_ACCOUNT, TEST
 from libraries.utils import logwarning
 
 
@@ -87,7 +88,7 @@ def get_user(account: GoogleAccount) -> GoogleMailMessages:
         ValueError: If the Google Mail user is not found for the account.
     """
     connection: GoogleAPIService = get_google_mail_connection(account)
-    user: GoogleMailMessages = get_google_mail_user(account, connection)
+    user: GoogleMailMessages = get_google_mail_user(account, connection, TEST)
     if not user:
         raise ValueError(f'Google Mail user not found for account {account}.')
     return user
@@ -108,7 +109,8 @@ def get_default_user() -> GoogleMailMessages:
     global _MAIL_USER
     _MAIL_USER = get_google_mail_user(
         DEFAULT_ACCOUNT, 
-        _MAIL_CONNECTION
+        _MAIL_CONNECTION, 
+        TEST
     )
     return _MAIL_USER
 
@@ -251,3 +253,43 @@ def send_email(
             return None
     
     return message.send()
+
+
+# Email validation function
+def valid_email_address(
+    booking: Booking | None = None, 
+    address: str | None = None, 
+    verbose: bool = False
+) -> bool:
+    """
+    Check if an email address is valid.
+    
+    Validates either a provided email address or an email address from a booking object.
+    
+    Parameters:
+        booking: The booking object containing guest email, or None to use address parameter.
+        address: The email address to validate, used if booking is None.
+        verbose: Whether to log warnings for invalid addresses.
+        
+    Returns:
+        bool: True if the email address is valid, False otherwise.
+    """
+    if address:
+        if address and '@' in address:
+            return True
+        if verbose:
+            logwarning(f'Invalid email address: {address}')
+        return False
+  
+    if not booking or not booking.guest:
+        if verbose:
+            logwarning(f'No booking/guest given for email check: {booking=}')
+        return False
+   
+    if not booking.guest.email or '@' not in booking.guest.email:
+        if verbose:
+            logwarning(f'Invalid email address for {booking.guest.prettyName} to '
+                      f'{booking.property.name}: {booking.guest.email}')
+        return False
+    
+    return True
