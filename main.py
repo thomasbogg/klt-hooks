@@ -1,5 +1,5 @@
 from correspondence.self.functions import new_email_to_self, send_email_to_self
-from flask import Flask, request
+from flask import Flask, Request, request
 import json
 import os
 
@@ -23,18 +23,33 @@ def wisecallback():
 
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
+    isRevolut = verify_revolut_payload_signature(request)
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
-    headers = json.loads(request.headers)
+    headers = request.headers
+   
     if data['event'] == 'ORDER_AUTHORISED':
         user, message = new_email_to_self(subject = "Revolut order authorised")
+   
     # 'event': 'ORDER_AUTHORISED', 'order_id': '6a05fb0c-d53e-a0fb-b8f5-854b9a51bc33'
     elif data['event'] == 'ORDER_COMPLETED':
         user, message = new_email_to_self(subject = "Revolut order completed")
-    message.body.paragraph(f"Received headers: {headers}")
+   
+    message.body.paragraph(f"Received headers: {headers.items()}")
     message.body.paragraph(f"Received data: {data}")
+    message.body.paragraph(f"Is valid Revolut signature: {isRevolut}")
     send_email_to_self(user, message)
+   
     return "Revolut contact received!"
 
+
+def verify_revolut_payload_signature(request: Request) -> bool:
+    import hmac
+    import hashlib
+    signing_secret = os.getenv('REVOLUT_API_SIGNING_SECRET')
+    timestamp = request.headers.get('Revolut-Request-Timestamp')
+    payload_to_sign = 'v1.' + timestamp + '.' + request.data.decode('utf-8')
+    signature = 'v1=' + hmac.new(bytes(signing_secret, 'utf-8'), msg = bytes(payload_to_sign, 'utf-8'), digestmod = hashlib.sha256).hexdigest()
+    return signature == request.headers.get('Revolut-Signature')
 
 if __name__ == "__main__":
     user, message = new_email_to_self(subject = "KLT Hooks starting")

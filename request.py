@@ -4,10 +4,13 @@ from settings import REVOLUT_API_VERSION, REVOLUT_SECRET_KEY, KLT_SECRET_KEY
 
 def send_test_request():
   
-  url = 'https://klt-hooks.up.railway.app/test'
+  url = 'https://klt-hooks.up.railway.app/revolutcallback'
   
   headers = {
-      "Authorization": f"Bearer {KLT_SECRET_KEY}"
+      "Authorization": f"Bearer {KLT_SECRET_KEY}",
+      "Content-Type": "application/json",
+      "Revolut-Request-Timestamp": "1234567890",
+      "Revolut-Signature": "v1=example_signature"
   }
   
   response = requests.post(url, data=json.dumps({"message": "This is the data"}), headers=headers)
@@ -33,7 +36,7 @@ def create_revolut_webhook():
 def create_revolut_payment_order(description = None, full_name = None, email = None, phone = None, amount = 2400):
   url = "https://sandbox-merchant.revolut.com/api/orders"
   
-  payload = ({
+  payload = {
     'amount': amount,
     'currency': 'EUR',
     'description': 'Test payment',
@@ -42,7 +45,7 @@ def create_revolut_payment_order(description = None, full_name = None, email = N
       'phone': '+351 935 769 935',
       'full_name': 'Thomas Bogg'
     },
-  })
+  }
   post_request(url, payload, REVOLUT_SECRET_KEY)
 
 
@@ -62,4 +65,4 @@ def post_request(url, data, secret_key):
 
 
 if __name__ == "__main__":
-  send_test_request()
+  create_revolut_payment_order()
