@@ -1,6 +1,6 @@
 import os
 
-from settings import DIR
+from default.settings import DIR
 from libraries.directory.directory import Directory
 
 

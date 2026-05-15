@@ -1,5 +1,5 @@
 from default.google.mail.functions import get_default_user, get_inbox, new_email
-from settings import DEFAULT_ACCOUNT
+from default.settings import DEFAULT_ACCOUNT
 from libraries.google.account import GoogleAccount
 from libraries.google.mail.message import GoogleMailMessage
 from libraries.google.mail.messages import GoogleMailMessages

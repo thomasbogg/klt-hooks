@@ -14,7 +14,7 @@ from libraries.google.drives.utils import (
 )
 from libraries.dates import dates
 from default.directory.functions import get_local_storage_directory
-from settings import DEFAULT_ACCOUNT, LOCAL
+from default.settings import DEFAULT_ACCOUNT, LOCAL
 from libraries.utils import log, logerror, logwarning
 
 

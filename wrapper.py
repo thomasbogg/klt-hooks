@@ -11,7 +11,7 @@ from libraries.dates import dates
 #    reconnect,
 #    upload_local_file_to_drive
 #)
-from settings import (
+from default.settings import (
     #CLOUD_UPDATE_EMAIL_FOLDER, 
     #CLOUD_UPDATE_EMAIL_SUBJECT, 
     #DATABASE_NAME, 

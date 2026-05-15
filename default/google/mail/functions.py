@@ -12,7 +12,7 @@ from libraries.google.mail.utils import (
 )
 from default.booking.booking import Booking
 from default.dates import dates
-from default.settings import DEFAULT_ACCOUNT, TEST
+from default.settings import DEFAULT_ACCOUNT
 from libraries.utils import logwarning
 
 
@@ -88,7 +88,7 @@ def get_user(account: GoogleAccount) -> GoogleMailMessages:
         ValueError: If the Google Mail user is not found for the account.
     """
     connection: GoogleAPIService = get_google_mail_connection(account)
-    user: GoogleMailMessages = get_google_mail_user(account, connection, TEST)
+    user: GoogleMailMessages = get_google_mail_user(account, connection)
     if not user:
         raise ValueError(f'Google Mail user not found for account {account}.')
     return user
@@ -109,8 +109,7 @@ def get_default_user() -> GoogleMailMessages:
     global _MAIL_USER
     _MAIL_USER = get_google_mail_user(
         DEFAULT_ACCOUNT, 
-        _MAIL_CONNECTION, 
-        TEST
+        _MAIL_CONNECTION
     )
     return _MAIL_USER
 
