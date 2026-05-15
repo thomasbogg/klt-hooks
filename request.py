@@ -13,7 +13,7 @@ def send_test_request():
       "Revolut-Signature": "v1=example_signature"
   }
   
-  response = requests.post(url, data=json.dumps({"message": "This is the data"}), headers=headers)
+  response = requests.post(url, data=json.dumps({"message": "This is the data", 'event': 'ORDER_AUTHORISED'}), headers=headers)
   print(response.content)
   print(response.status_code)
   print(response.text)
@@ -65,4 +65,5 @@ def post_request(url, data, secret_key):
 
 
 if __name__ == "__main__":
+  #send_test_request()
   create_revolut_payment_order()
