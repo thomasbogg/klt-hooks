@@ -1,3 +1,10 @@
+"""TODO:
+    - set new production webhook for Revolut to point to /revolutcallback
+    - functions to update database with callback data
+    - functions to send emails to self and guest for successful payment
+"""
+
+
 
 from correspondence.self.functions import new_email_to_self, send_email_to_self
 from flask import Flask, Request, request
