@@ -5,7 +5,6 @@ from default.booking.booking import Booking
 from default.database.database import Database
 from default.guest.guest import Guest
 from default.property.property import Property
-from default.property.accountant import Accountant
 from default.settings import TEST, VALID_BOOKING_STATUSES
 
 
