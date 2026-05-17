@@ -16,6 +16,7 @@ from typing import Any
 from libraries.utils import logerror
 
 
+
 class Booking:
     """
     The main Booking class that represents a complete booking record in the system.
