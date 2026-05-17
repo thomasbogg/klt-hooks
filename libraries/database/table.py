@@ -393,6 +393,8 @@ class Table(DatabaseObject):
         if self._select:
             if name not in self._selection:
                 self._selection[name] = object
+            if 'id' not in self._selection:
+                self._selection['id'] = Column(name='id', tablename=self._name, dataType='integer')
             return self
 
         elif self._where:

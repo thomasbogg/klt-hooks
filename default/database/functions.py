@@ -7,7 +7,6 @@ from default.guest.guest import Guest
 from default.property.property import Property
 from default.property.accountant import Accountant
 from default.settings import TEST, VALID_BOOKING_STATUSES
-from default.updates.updates import Update
 
 
 def get_database() -> Database:
@@ -61,7 +60,6 @@ def search_bookings(database: Database = None, start: date = None,
     search.details.isPrimaryTable = True
     
     select = search.details.select()
-    select.id()
     select.guestId()
     select.propertyId()
     
@@ -146,7 +144,6 @@ def search_properties() -> Database:
     properties.isPrimaryTable = True
     
     select = properties.select()
-    select.id()
     select.name()
     select.shortName()
     
@@ -179,50 +176,27 @@ def get_property(id: int = None, name: str = None) -> Database | None:
     return search
 
 
-def get_accountant(id: int = None, company: str = None, name: str = None) -> Database:
-    search: Database = Database(loadObject=Accountant, TEST=TEST).connect()
-    
-    select = search.propertyAccountants.select()
-    select.all()
-    
-    where = search.propertyAccountants.where()
-    if id:
-        where.id().isEqualTo(id)
-    if company:
-        where.company().isEqualTo(company)
-    if name:
-        where.name().isEqualTo(name)
-    
-    return search
-
-
-def get_property_price(
-    name: str = None, 
-    month: str = None, 
-    year: int = None
-) -> Database | None:
+def get_tourist_tax_booking(database: Database = None, orderId: int = None) -> Database | None:
     """
-    Get property price by name, month, and year.
+    Get a tourist tax booking by orderId.
     
     Parameters:
         database: The database connection to use. If None, creates a new connection.
-        name: Optional property name.
-        month: Optional month.
-        year: Optional year.
+        orderId: Optional order id.
+        
     Returns:
         Database: Database object configured with the search query, or None if no criteria provided.
     """
-    if not name and not month and not year:
+    if not orderId:
         return None
     
-    search = get_property(name=name)
+    search = search_valid_bookings(database)
 
-    select = search.propertyPrices.select()
-    select.month(month)
-    
-    where = search.propertyPrices.where()
-    if year:
-        where.year().isEqualTo(year)
+    select = search.charges.select()
+    select.id()
+
+    where = search.touristtax.where()
+    where.orderId().isEqualTo(orderId)
     
     return search
 
@@ -297,7 +271,6 @@ def search_guests() -> Database:
     guests.isPrimaryTable = True
     
     select = guests.select()
-    select.id()
     select.firstName()
     select.lastName()
     
@@ -328,58 +301,6 @@ def get_guest(id: int = None, firstName: str = None, lastName: str = None) -> Da
         guests.where().firstName().isEqualTo(firstName)
     if lastName:
         guests.where().lastName().isEqualTo(lastName)
-    
-    return search
-
-
-# Update search functions
-def search_updates(start: date = None, end: date = None) -> Database:
-    """
-    Search for updates in the database.
-    
-    Parameters:
-        start: Optional start date filter.
-        end: Optional end date filter.
-        
-    Returns:
-        Database: Database object configured with the updates search query.
-    """
-    search: Database = Database(loadObject=Update, TEST=TEST).connect()
-    updates = search.updates
-    updates.isPrimaryTable = True
-    
-    select = updates.select()
-    select.id()
-    
-    if start and end:
-        where = updates.where()
-        where.date().isGreaterThanOrEqualTo(start)
-        where.date().isLessThanOrEqualTo(end)
-    
-    return search
-
-
-def get_update(id: int = None, bookingId: int = None) -> Database | None:
-    """
-    Get an update by id or bookingId.
-    
-    Parameters:
-        id: Optional update id.
-        bookingId: Optional booking id.
-        
-    Returns:
-        Database: Database object configured with the search query, or None if no criteria provided.
-    """
-    if not id and not bookingId:
-        return None
-    
-    search = search_updates()
-    where = search.updates.where()
-    
-    if id:
-        where.id().isEqualTo(id)
-    if bookingId:
-        where.bookingId().isEqualTo(bookingId)
     
     return search
 
@@ -441,38 +362,6 @@ def set_enquiry_sources(search: Database, **kwargs) -> Database:
     if isNotIn:
         where.enquirySource().isNotIn(tuple(isNotIn))
     
-    return search
-
-
-def set_valid_accounts_booking(search: Database) -> Database:
-    """
-    Set filter for valid account booking statuses.
-    
-    Parameters:
-        search: The search database object.
-        
-    Returns:
-        Database: The updated search database object.
-    """
-    search.details.where().enquiryStatus().isIn(
-        VALID_BOOKING_STATUSES + ('Booking cancelled with fees',)
-    )
-    return search
-
-
-def set_valid_management_booking(search: Database) -> Database:
-    """
-    Set filter for valid management booking statuses.
-    
-    Parameters:
-        search: The search database object.
-        
-    Returns:
-        Database: The updated search database object.
-    """
-    search.details.where().enquiryStatus().isIn(
-        VALID_BOOKING_STATUSES + ('Booking confirmed as replacement',)
-    )
     return search
 
 
