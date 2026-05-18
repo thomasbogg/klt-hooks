@@ -67,7 +67,7 @@ def verify_revolut_payload_signature(headers: Headers, raw_data: bytes) -> bool:
     isRevolut = signature == headers.get('Revolut-Signature')
     if not isRevolut:
         log_invalid_revolut_callback(timestamp, payload_to_sign, signature, headers.get('Revolut-Signature'), REVOLUT_API_SIGNING_KEY)
-    return isRevolut, timestamp, payload_to_sign, signature, headers.get('Revolut-Signature')
+    return isRevolut
 
 
 def _get_tourist_tax_booking(database: Database, orderId: str) -> Booking | None:

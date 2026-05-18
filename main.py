@@ -6,18 +6,18 @@ from flask import Flask, request
 import json
 import os
 from revolut import process_revolut_callback, verify_revolut_payload_signature
-
+from wrapper import update
 
 app = Flask(__name__)
 
 
+@update
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
     headers = request.headers
     raw_data = request.data
     
-    isRevolut = verify_revolut_payload_signature(headers, raw_data)
-    if not isRevolut:
+    if not verify_revolut_payload_signature(headers, raw_data):
         return "Invalid Revolut callback received!", 400
     
     data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON

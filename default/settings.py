@@ -41,8 +41,6 @@ DATABASE_IN_USE_EMAIL_SUBJECT = 'RUNNING UPDATE WITH DATABASE'
 # Directory paths
 DIR: str = os.getcwd()
 LOCAL_STORAGE_DIR: str = os.path.abspath('cache')
-BROWSER_DIR: str = '/snap/chromium/current/usr/lib/chromium-browser/'
-BROWSER_USER_DATA_DIR: str = os.path.join(os.path.expanduser('~'), '.browser_data')
 
 # Database configuration
 DATABASE_NAME: str = os.getenv('DATABASE_NAME')
