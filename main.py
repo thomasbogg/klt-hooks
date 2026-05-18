@@ -42,7 +42,7 @@ def wisecallback():
     except Exception as e:
         _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
  
-    return 204 # Return 204 to indicate that the callback was received
+    return 200 # Return 200 to indicate that the callback was received
 
 
 @app.route("/test", methods=["POST"])
