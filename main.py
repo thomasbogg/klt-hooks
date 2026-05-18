@@ -30,6 +30,23 @@ def revolutcallback():
     return 200
 
 
+@app.route("/wisecallback", methods=["POST"])
+def wisecallback():
+
+    headers = request.headers
+    data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
+    
+    from correspondence.self.functions import new_email_to_self, send_email_to_self
+    user, message = new_email_to_self(subject = "Wise callback received")
+    message.body.paragraph("Headers:")
+    for key, value in headers.items():
+        message.body.paragraph(f"{key}: {value}")
+    message.body.paragraph(f"Received data: {data}")
+    send_email_to_self(user, message)
+
+    return 'Wise callback received!'
+
+
 @app.route("/test", methods=["POST"])
 def hook():
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
