@@ -1,11 +1,13 @@
-import os
+import hashlib
+import hmac
 from werkzeug.datastructures import Headers
 
 from correspondence.self.functions import new_email_to_self, send_email_to_self
 from correspondence.guest.functions import new_guest_arrival_email, send_guest_email
-from default.database.functions import get_database, get_tourist_tax_booking
-from default.database.database import Database
 from default.booking.booking import Booking
+from default.database.database import Database
+from default.database.functions import get_database, get_tourist_tax_booking
+from default.settings import REVOLUT_API_SIGNING_KEY
 from wrapper import pull_database, update
 
 
@@ -30,12 +32,14 @@ def process_revolut_callback(data: dict) -> None:
 
     total = booking.charges.touristtax.total
 
+    ## EMAIL self for reference check
     user, message = new_email_to_self(subject = f"Revolut payment received for {booking.guest.fullName}")
     body = message.body
     body.paragraph(f"Received a payment of €{'{:.2f}'.format(total)} for order {orderId} via Revolut.")
-    body.paragraph(f"Booking {booking.id} has been updated at TT db Id {booking.charges.touristtax.id}.")
+    body.paragraph(f"Booking {booking.id} has been updated at touristtax table row {booking.charges.touristtax.id}.")
     send_email_to_self(user, message)
 
+    ## EMAIL guest to confirm receipt of tourist tax payment
     user, message = new_guest_arrival_email(topic=f'Tourist Tax Paid', booking=booking)
     body = message.body
     body.paragraph(f"Thank you very much for your tourist tax payment of €{'{:.2f}'.format(total)}.")
@@ -46,9 +50,6 @@ def process_revolut_callback(data: dict) -> None:
 
 @update
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes) -> bool:
-    import hmac
-    import hashlib
-    from default.settings import REVOLUT_API_SIGNING_KEY
     timestamp = headers.get('Revolut-Request-Timestamp')
     payload_to_sign = 'v1.' + timestamp + '.' + raw_data.decode('utf-8')
     signature = 'v1=' + hmac.new(bytes(REVOLUT_API_SIGNING_KEY, 'utf-8'), msg = bytes(payload_to_sign, 'utf-8'), digestmod = hashlib.sha256).hexdigest()
