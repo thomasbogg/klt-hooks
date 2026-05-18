@@ -24,7 +24,7 @@ def revolutcallback():
   
     return 204 # Return 204 to indicate that the callback was received, even if there was an error processing it
 
-
+"""
 @app.route("/wise/callback", methods=["POST"])
 def wisecallback():
     try:
@@ -44,7 +44,7 @@ def wisecallback():
  
     return 200 # Return 200 to indicate that the callback was received
 
-
+"""
 @app.route("/test", methods=["POST"])
 def hook():
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
@@ -52,23 +52,6 @@ def hook():
     user, message = new_email_to_self(subject = "Local contact received")
     message.body.paragraph(f"Received data: {data}")
     send_email_to_self(user, message)
-
-    if not verify_revolut_payload_signature(request.headers, request.data):
-        return "Invalid Revolut callback received!"
-    
-    from correspondence.self.functions import new_email_to_self, send_email_to_self
-    user, message = new_email_to_self(subject = "Valid Revolut callback received")
-    message.body.paragraph("Passed check")
-    send_email_to_self(user, message)
-
-    if not data['event'] in ('ORDER_COMPLETED', 'ORDER_CANCELLED'):
-        return 200
-    
-    user, message = new_email_to_self(subject = f"Processing Revolut callback for event {data['event']}")
-    message.body.paragraph(f"Processing callback for event {data['event']} with data: {data}")
-    send_email_to_self(user, message)
-    process_revolut_callback(data)
-    
     return "Hello, world!"
 
 
