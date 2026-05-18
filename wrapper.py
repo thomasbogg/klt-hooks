@@ -86,7 +86,9 @@ def pull_database(func):
         try: 
             func(*args, **kwargs)
         except Exception:
-            _log_exception(sections)
+            _contact_self(
+                        subject=f'ERROR IN {func.__name__}', 
+                        body=str(traceback.format_exc(chain=False)))
         
         sections.smallDivide()  
         sections.log('Storing database on CLOUD...')
@@ -118,22 +120,6 @@ def _get_database_file_on_drive() -> GoogleDriveFile:
             f'Database file not found in Drive Directory {driveDirectory.id}.')
     driveFile.path = DATABASE_PATH
     return driveFile
-
-
-def _log_exception(sections: Interface) -> None:
-    """
-    Log an exception to the console.
-    
-    Args:
-        sections: The interface subsections object used for logging.
-        
-    Returns:
-        None
-    """
-    sections.log('ERROR: Could not complete.')
-    sections.divide()
-    traceback.print_exc(chain=False)
-    sections.divide()
 
 
 def _contact_self(subject: str, body: str) -> None:

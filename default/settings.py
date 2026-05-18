@@ -148,6 +148,8 @@ DEFAULT_ACCOUNT = KLTGoogleAccount(details=os.getenv('DEFAULT_ACCOUNT').split(';
 ##################################################
 
 REVOLUT_SECRET_KEY = os.getenv('REVOLUT_API_SECRET_KEY')
+REVOLUT_API_KEY = os.getenv('REVOLUT_API_KEY')
+REVOLUT_API_SIGNING_KEY = os.getenv('REVOLUT_API_SIGNING_KEY')
 REVOLUT_API_VERSION = os.getenv('REVOLUT_API_VERSION')
 REVOLUT_BASE_PAYMENT_LINK = 'https://checkout.revolut.com/payment-link/'
 

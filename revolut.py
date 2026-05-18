@@ -44,11 +44,14 @@ def process_revolut_callback(data: dict) -> None:
     send_guest_email(user, message)
 
 
-def log_invalid_revolut_callback(headers, raw_data):
+def log_invalid_revolut_callback(timestamp, payload_to_sign, signature, received_signature, signing_key):
     user, message = new_email_to_self(subject = "Invalid Revolut callback received")
     message.body.paragraph("Received an invalid Revolut callback. The payload signature verification failed.")
-    message.body.paragraph(f"Received headers: {headers}")
-    message.body.paragraph(f"Received data: {raw_data}")
+    message.body.paragraph(f"Timestamp: {timestamp}")
+    message.body.paragraph(f"Payload to sign: {payload_to_sign}")
+    message.body.paragraph(f"Calculated signature: {signature}")
+    message.body.paragraph(f"Received signature: {received_signature}")
+    message.body.paragraph(f"Signing key used: {signing_key}")
     send_email_to_self(user, message)
 
 
@@ -56,12 +59,14 @@ def log_invalid_revolut_callback(headers, raw_data):
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes) -> bool:
     import hmac
     import hashlib
-    signing_secret = os.getenv('REVOLUT_API_SIGNING_KEY')
+    from default.settings import REVOLUT_API_SIGNING_KEY
     timestamp = headers.get('Revolut-Request-Timestamp')
     payload_to_sign = 'v1.' + timestamp + '.' + raw_data.decode('utf-8')
-    signature = 'v1=' + hmac.new(bytes(signing_secret, 'utf-8'), msg = bytes(payload_to_sign, 'utf-8'), digestmod = hashlib.sha256).hexdigest()
+    signature = 'v1=' + hmac.new(bytes(REVOLUT_API_SIGNING_KEY, 'utf-8'), msg = bytes(payload_to_sign, 'utf-8'), digestmod = hashlib.sha256).hexdigest()
     isRevolut = signature == headers.get('Revolut-Signature')
-    return isRevolut
+    if not isRevolut:
+        log_invalid_revolut_callback(timestamp, payload_to_sign, signature, headers.get('Revolut-Signature'), REVOLUT_API_SIGNING_KEY)
+    return isRevolut, timestamp, payload_to_sign, signature, headers.get('Revolut-Signature')
 
 
 def _get_tourist_tax_booking(database: Database, orderId: str) -> Booking | None:

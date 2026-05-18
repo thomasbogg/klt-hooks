@@ -61,6 +61,6 @@ def send_email_to_self(
         raise ValueError('No message provided for email to self.')
     if not user:
         user = get_default_user()
-    if not get_inbox(user=user, sender=user.account.emailAddress, subject=message.subject):
-        message.send()
+    #if not get_inbox(user=user, sender=user.account.emailAddress, subject=message.subject):
+    message.send()
     return None

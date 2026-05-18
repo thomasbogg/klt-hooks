@@ -16,14 +16,13 @@ def revolutcallback():
     headers = request.headers
     raw_data = request.data
     
-    if not verify_revolut_payload_signature(headers, raw_data):
-        from revolut import log_invalid_revolut_callback    
-        log_invalid_revolut_callback(headers, raw_data)
+    isRevolut = verify_revolut_payload_signature(headers, raw_data)
+    if not isRevolut:
         return "Invalid Revolut callback received!", 400
     
     data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON
 
-    if not data['event'] == 'ORDER_COMPLETED':
+    if not data['event'] in ('ORDER_COMPLETED', 'ORDER_CANCELLED'):
         return 200
     
     process_revolut_callback(data)
