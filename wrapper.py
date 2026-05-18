@@ -19,7 +19,6 @@ from default.settings import (
     DATABASE_PATH, 
     DEFAULT_ACCOUNT,
 )
-from libraries.interface.interface import Interface
 from libraries.utils import logwarning
 
 #LOAD_START = dates.now()
@@ -40,10 +39,10 @@ def update(func):
     """
     def wrapper(*args, **kwargs):
         try:
-            run = func(*args, **kwargs)
+            func(*args, **kwargs)
         except Exception as e:
             _contact_self(
-                        subject=f'ERROR IN {func.__name__}', 
+                        subject=f'ERROR IN {func.__name__}',
                         body=str(traceback.format_exc(chain=False)))
     return wrapper
 
@@ -76,21 +75,13 @@ def pull_database(func):
             logwarning('Cannot pull database as is it currently in use. Retrying in 1 minute...')
             sleep(60)
         
-        interface = Interface(divider=90)
-        interface.divide()
-        sections = interface.subsections()
-        sections.log('Pulling database from CLOUD...')
-        
         driveFile = _get_database_file_on_drive()
         driveFile.download()
 
         func(*args, **kwargs)
         
-        sections.smallDivide()  
-        sections.log('Storing database on CLOUD...')
         driveFile.connection =  reconnect()
         upload_local_file_to_drive(driveFile)
-        interface.divide()
         
         _delete_current_update_messages()
 
