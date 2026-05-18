@@ -12,20 +12,15 @@ from wrapper import update
 app = Flask(__name__)
 
 
-@update
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
     headers = request.headers
     raw_data = request.data
-    from correspondence.self.functions import new_email_to_self, send_email_to_self
-    user, message = new_email_to_self(subject = "Revolut callback received")
-    message.body.paragraph(f"Received headers: {headers}")
-    message.body.paragraph(f"Received raw data: {raw_data}")
-    send_email_to_self(user, message)
     
     if not verify_revolut_payload_signature(headers, raw_data):
         return "Invalid Revolut callback received!", 400
     
+    from correspondence.self.functions import new_email_to_self, send_email_to_self
     user, message = new_email_to_self(subject = "Valid Revolut callback received")
     message.body.paragraph("Passed check")
     send_email_to_self(user, message)

@@ -28,6 +28,12 @@ def process_revolut_callback(data: dict) -> None:
     booking.update()
     database.close()
 
+    user, message = new_email_to_self(subject = f"Got tourist tax booking for order {orderId}")
+    body = message.body
+    body.paragraph(f"Found booking for order {orderId} with guest {booking.guest.fullName} and property {booking.property.name}.")
+    send_email_to_self(user, message)
+  
+  
     total = booking.charges.touristtax.total
 
     user, message = new_email_to_self(subject = f"Revolut payment received for {booking.guest.fullName}")
