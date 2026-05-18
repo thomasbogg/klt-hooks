@@ -9,7 +9,6 @@ from default.booking.booking import Booking
 from wrapper import pull_database, update
 
 
-@update
 @pull_database
 def process_revolut_callback(data: dict) -> None:
     """

@@ -166,6 +166,7 @@ class Database(DefaultDatabase):
         Returns:
             Touristtax: The tourist tax table object.
         """
+        self._table(name='charges', object=Charges).select().id()
         return self._table(name='touristtax', object=Touristtax)
     
     @property

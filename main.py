@@ -8,6 +8,7 @@ import os
 from revolut import process_revolut_callback, verify_revolut_payload_signature
 from wrapper import update
 
+
 app = Flask(__name__)
 
 
@@ -16,15 +17,27 @@ app = Flask(__name__)
 def revolutcallback():
     headers = request.headers
     raw_data = request.data
+    from correspondence.self.functions import new_email_to_self, send_email_to_self
+    user, message = new_email_to_self(subject = "Revolut callback received")
+    message.body.paragraph(f"Received headers: {headers}")
+    message.body.paragraph(f"Received raw data: {raw_data}")
+    send_email_to_self(user, message)
     
     if not verify_revolut_payload_signature(headers, raw_data):
         return "Invalid Revolut callback received!", 400
     
+    user, message = new_email_to_self(subject = "Valid Revolut callback received")
+    message.body.paragraph("Passed check")
+    send_email_to_self(user, message)
+
     data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON
 
     if not data['event'] in ('ORDER_COMPLETED', 'ORDER_CANCELLED'):
         return 200
     
+    user, message = new_email_to_self(subject = f"Processing Revolut callback for event {data['event']}")
+    message.body.paragraph(f"Processing callback for event {data['event']} with data: {data}")
+    send_email_to_self(user, message)
     process_revolut_callback(data)
     return 200
 

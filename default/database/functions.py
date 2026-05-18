@@ -191,9 +191,6 @@ def get_tourist_tax_booking(database: Database = None, orderId: int = None) -> D
     
     search = search_valid_bookings(database)
 
-    select = search.charges.select()
-    select.id()
-
     where = search.touristtax.where()
     where.orderId().isEqualTo(orderId)
     
