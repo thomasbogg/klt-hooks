@@ -9,6 +9,7 @@ from default.booking.booking import Booking
 from wrapper import pull_database, update
 
 
+@update
 @pull_database
 def process_revolut_callback(data: dict) -> None:
     """
@@ -32,14 +33,14 @@ def process_revolut_callback(data: dict) -> None:
 
     user, message = new_email_to_self(subject = f"Revolut payment received for {booking.guest.fullName}")
     body = message.body
-    body.paragraph(f"Received a payment for of {total} order {orderId} from Revolut.")
+    body.paragraph(f"Received a payment of €{'{:.2f}'.format(total)} for order {orderId} via Revolut.")
     body.paragraph(f"Booking {booking.id} has been updated at TT db Id {booking.charges.touristtax.id}.")
     send_email_to_self(user, message)
 
     user, message = new_guest_arrival_email(topic=f'Tourist Tax Paid', booking=booking)
     body = message.body
-    body.paragraph(f"Thank you very much for your tourist tax payment of {total}.")
-    body.paragraph(f"This email acts as confirmation of your payment.")
+    body.paragraph(f"Thank you very much for your tourist tax payment of €{'{:.2f}'.format(total)}.")
+    body.paragraph(f"This email serves as confirmation of your payment.")
     body.paragraph(f"If you have questions or concerns, please do not hesitate to contact us.")
     send_guest_email(user, message)
 

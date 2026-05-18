@@ -83,12 +83,8 @@ def pull_database(func):
         
         driveFile = _get_database_file_on_drive()
         driveFile.download()
-        try: 
-            func(*args, **kwargs)
-        except Exception:
-            _contact_self(
-                        subject=f'ERROR IN {func.__name__}', 
-                        body=str(traceback.format_exc(chain=False)))
+
+        func(*args, **kwargs)
         
         sections.smallDivide()  
         sections.log('Storing database on CLOUD...')
