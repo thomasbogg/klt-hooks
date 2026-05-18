@@ -1,12 +1,7 @@
-"""TODO:
-    - functions to update database with callback data
-    - functions to send emails to self and guest for successful payment
-"""
 from flask import Flask, request
 import json
 import os
 from revolut import process_revolut_callback, verify_revolut_payload_signature
-from wrapper import update
 
 
 app = Flask(__name__)
@@ -14,20 +9,18 @@ app = Flask(__name__)
 
 @app.route("/revolutcallback", methods=["POST"])
 def revolutcallback():
-    headers = request.headers
-    raw_data = request.data
-    
-    if not verify_revolut_payload_signature(headers, raw_data):
-        return "Invalid Revolut callback received!", 400
+    if not verify_revolut_payload_signature(request.headers, request.data):
+        return "Invalid Revolut callback received!"
+
+    data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
     
     from correspondence.self.functions import new_email_to_self, send_email_to_self
     user, message = new_email_to_self(subject = "Valid Revolut callback received")
     message.body.paragraph("Passed check")
+    message.body.paragraph(f"Received data: {data}")
     send_email_to_self(user, message)
 
-    data = json.loads(raw_data)  # Attempt to parse the incoming data as JSON
-
-    if not data['event'] in ('ORDER_COMPLETED', 'ORDER_CANCELLED'):
+    if not data['event'] == 'ORDER_COMPLETED':
         return 200
     
     user, message = new_email_to_self(subject = f"Processing Revolut callback for event {data['event']}")
@@ -44,6 +37,23 @@ def hook():
     user, message = new_email_to_self(subject = "Local contact received")
     message.body.paragraph(f"Received data: {data}")
     send_email_to_self(user, message)
+
+    if not verify_revolut_payload_signature(request.headers, request.data):
+        return "Invalid Revolut callback received!"
+    
+    from correspondence.self.functions import new_email_to_self, send_email_to_self
+    user, message = new_email_to_self(subject = "Valid Revolut callback received")
+    message.body.paragraph("Passed check")
+    send_email_to_self(user, message)
+
+    if not data['event'] in ('ORDER_COMPLETED', 'ORDER_CANCELLED'):
+        return 200
+    
+    user, message = new_email_to_self(subject = f"Processing Revolut callback for event {data['event']}")
+    message.body.paragraph(f"Processing callback for event {data['event']} with data: {data}")
+    send_email_to_self(user, message)
+    process_revolut_callback(data)
+    
     return "Hello, world!"
 
 

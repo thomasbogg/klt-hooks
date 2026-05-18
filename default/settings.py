@@ -26,6 +26,7 @@ TEST: bool = os.getenv('TEST', 'False').lower() == 'true'
 
 # Website information
 WEBSITE_LINK: str = 'https://www.algarvebeachapartments.com/'
+KLT_WEBHOOK_URL: str = 'https://klt-hooks.up.railway.app/'
 
 # Default language
 DEFAULT_LANGUAGE = 'EN-GB'
