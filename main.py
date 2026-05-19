@@ -11,18 +11,18 @@ app = Flask(__name__)
 def revolutcallback():
     try:
         if not verify_revolut_payload_signature(request.headers, request.data):
-            return 204 # Return 204 to indicate that the callback was received
+            return '204' # Return 204 to indicate that the callback was received
 
         data = json.loads(request.data)  
         if not data['event'] == 'ORDER_COMPLETED':
-            return 204
+            return '204'
 
         process_revolut_callback(data)
   
     except Exception as e:
         _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
   
-    return 204 # Return 204 to indicate that the callback was received, even if there was an error processing it
+    return '204' # Return 204 to indicate that the callback was received, even if there was an error processing it
 
 """
 @app.route("/wise/callback", methods=["POST"])
@@ -42,7 +42,7 @@ def wisecallback():
     except Exception as e:
         _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
  
-    return 200 # Return 200 to indicate that the callback was received
+    return '200' # Return 200 to indicate that the callback was received
 
 """
 @app.route("/test", methods=["POST"])
