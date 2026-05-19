@@ -21,8 +21,6 @@ from default.settings import (
 )
 from libraries.utils import logwarning
 
-#LOAD_START = dates.now()
-
 
 def update(func):
     """
@@ -39,7 +37,7 @@ def update(func):
     """
     def wrapper(*args, **kwargs):
         try:
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
             _contact_self(
                         subject=f'ERROR IN {func.__name__}',
