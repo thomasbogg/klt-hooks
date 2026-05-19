@@ -8,7 +8,7 @@ from default.booking.booking import Booking
 from default.database.database import Database
 from default.database.functions import get_database, get_tourist_tax_booking
 from default.settings import REVOLUT_API_SIGNING_KEY
-from wrapper import pull_database, update
+from wrapper import pull_database
 
 
 @pull_database
@@ -48,7 +48,6 @@ def process_revolut_callback(data: dict) -> None:
     send_guest_email(user, message)
 
 
-@update
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes) -> bool:
     timestamp = headers.get('Revolut-Request-Timestamp')
     payload_to_sign = 'v1.' + timestamp + '.' + raw_data.decode('utf-8')
