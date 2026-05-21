@@ -26,6 +26,11 @@ def process_revolut_callback(data: dict) -> None:
 
     database = get_database()
     booking = _get_tourist_tax_booking(database, orderId)
+
+    if booking.charges.touristtax.paid:
+        database.close()
+        return
+        
     booking.charges.touristtax.paid = True
     booking.update()
     database.close()
