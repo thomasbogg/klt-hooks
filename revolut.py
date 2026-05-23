@@ -98,5 +98,6 @@ def _get_tourist_tax_booking(database: Database, orderId: str) -> Booking | None
 
     select = search.touristtax.select()
     select.total()
+    select.paid()
 
     return search.fetchone()
