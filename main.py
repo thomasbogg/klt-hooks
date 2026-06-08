@@ -1,16 +1,17 @@
 from flask import Flask, request
 import json
 import os
-from revolut import process_revolut_callback, verify_revolut_payload_signature
+from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
+from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY
 
 
 app = Flask(__name__)
 
 
-@app.route("/revolut/callback", methods=["POST"])
-def revolutcallback():
+@app.route("/revolut/merchant/callback", methods=["POST"])
+def revolut_merchant_callback():
     try:
-        if not verify_revolut_payload_signature(request.headers, request.data):
+        if not verify_revolut_payload_signature(request.headers, request.data, REVOLUT_MERCHANT_API_SIGNING_KEY):
             return ('', 204) # Return 204 to indicate that the callback was received
 
         data = json.loads(request.data)  
@@ -18,7 +19,23 @@ def revolutcallback():
             _contact_self_for_error(f"Received unexpected event type: {data['event']}", request.data.decode('utf-8'), dict(request.headers))
             return ('', 204) # Return 204 to indicate that the callback was received, even if it's not the event we're interested in
 
-        process_revolut_callback(data)
+        process_revolut_merchant_callback(data)
+  
+    except Exception as e:
+        _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
+  
+    return ('', 204) # Return 204 to indicate that the callback was received, even if there was an error processing it
+
+@app.route("/revolut/transfer/callback", methods=["POST"])
+def revolut_transfer_callback():
+    try:
+        # For now, just log the incoming callback data for debugging purposes
+        data = json.loads(request.data)  
+        from correspondence.self.functions import new_email_to_self, send_email_to_self
+        user, message = new_email_to_self(subject = "Revolut transfer callback received")
+        message.body.paragraph("Received a Revolut transfer callback with the following data:")
+        message.body.paragraph(f"{data}")
+        send_email_to_self(user, message)
   
     except Exception as e:
         _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
