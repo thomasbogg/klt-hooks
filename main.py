@@ -26,6 +26,7 @@ def revolut_merchant_callback():
   
     return ('', 204) # Return 204 to indicate that the callback was received, even if there was an error processing it
 
+
 @app.route("/revolut/transfer/callback", methods=["POST"])
 def revolut_transfer_callback():
     try:
@@ -42,27 +43,7 @@ def revolut_transfer_callback():
   
     return ('', 204) # Return 204 to indicate that the callback was received, even if there was an error processing it
 
-"""
-@app.route("/wise/callback", methods=["POST"])
-def wisecallback():
-    try:
-        headers = request.headers
-        data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
-        
-        from correspondence.self.functions import new_email_to_self, send_email_to_self
-        user, message = new_email_to_self(subject = "Wise callback received")
-        message.body.paragraph("Headers:")
-        for key, value in headers.items():
-            message.body.paragraph(f"{key}: {value}")
-        message.body.paragraph(f"Received data: {data}")
-        send_email_to_self(user, message)
- 
-    except Exception as e:
-        _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
- 
-    return ('', 200) # Return 200 to indicate that the callback was received
 
-"""
 @app.route("/test", methods=["POST"])
 def hook():
     data = json.loads(request.data)  # Attempt to parse the incoming data as JSON
