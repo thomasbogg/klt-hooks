@@ -1,5 +1,112 @@
-# Ignore credentials files
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Environment variables and secrets
+.env
+.env.*
+*.env
+.secrets/
+
+# Credentials and sensitive files
 accounts/credentials/
+
+# Cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.py[codz]
+*$py.class
+.pytest_cache/
+.coverage
+
+# Development and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (unless needed in production)
+README.md
+*.md
+docs/
+
+# Log files
+*.log
+logs/
+
+# Database files (if using local SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Development and testing files
+test/
+tests/
+*_test.py
+test_*.py
+copilot/
+drafts/
+
+# Large directories that may not be needed in production
+# correspondence/  # Uncomment if not needed in production
+# backup/          # Uncomment if not needed in production
+
+# Build artifacts and temporary files
+*.tmp
+*.temp
+build/
+dist/
+
+# Additional exclusions for smaller images
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+.cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+develop-eggs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python artifacts
+*.so
+.Python
+
+# Docker files (to avoid recursive copying)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Test files (unless needed in production)
+test/
+tests/
+*_test.py
+test_*.py
+test.py
+
+# Ignore credentials files
+accounts/
 
 # Ignore downloaded data files
 downloaded_files/
@@ -7,18 +114,8 @@ downloaded_files/
 # Ignore the listed data files
 default/property/data/
 
-# Ignore Copilot instructions
-copilot/
-
-# Ignore test files
-test.py
-dockertest.py
-
-# Ignore secrets files
-.secrets/
-
-# Ignore docker files
-docker-compose.yml
+# Ignore property database updater
+default/property/database.py
 
 # Ignore compiled Python files
 __pycache__/
@@ -30,6 +127,9 @@ __pycache__/
 
 # Ignore database files
 *.db
+
+# Ignore VS Code settings
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -171,6 +271,8 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.env/
+.venv/
 env/
 venv/
 ENV/
@@ -238,3 +340,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Codebase files
+request.py
