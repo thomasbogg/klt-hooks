@@ -8,7 +8,7 @@ from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY
 app = Flask(__name__)
 
 
-@app.route("/revolut/merchant/callback", methods=["POST"])
+@app.route("/revolut/callback", methods=["POST"])
 def revolut_merchant_callback():
     try:
         if not verify_revolut_payload_signature(request.headers, request.data, REVOLUT_MERCHANT_API_SIGNING_KEY):
