@@ -1,8 +1,7 @@
 from datetime import date
 
-from default.google.drive.functions import get_klt_management_directory_on_drive
-from default.google.drive.functions import reconnect as reconnect_drive
-from default.settings import DATABASE_NAME, DATABASE_PATH
+from default.google.drive.functions import download_drive_file_to_local_storage, upload_local_file_to_drive
+from default.settings import DATABASE_NAME, DATABASE_PATH, DIR
 from libraries.database.database import Database as Databases
 from default.database.database import Database
 from libraries.google.drives.file import GoogleDriveFile
@@ -12,7 +11,7 @@ from default.database.rows.touristtax import Touristtax
 def download_database(
     driveDirectory: str = 'Database', 
     name: str = DATABASE_NAME, 
-    path: str = DATABASE_PATH
+    localDirectory: str = DIR
 ) -> None:
     """
     Download the database file from Google Drive to the local path.
@@ -23,13 +22,7 @@ def download_database(
     Returns:
         None
     """
-    drive = get_klt_management_directory_on_drive(driveDirectory)
-    file = drive.file(name=name)
-    if not file.exists:
-        raise FileNotFoundError(
-            f'Database file not found in Drive Directory {driveDirectory.id}.')
-    file.path = path
-    file.download()
+    file = download_drive_file_to_local_storage(drivePath=driveDirectory, filename=name, localDirectory=localDirectory)
     return file
 
 
@@ -37,7 +30,7 @@ def upload_database(
     file: GoogleDriveFile = None, 
     driveDirectory: str = 'Database', 
     name: str = DATABASE_NAME, 
-    path: str = DATABASE_PATH
+    localDirectory: str = DIR
 ) -> None:
     """
     Upload the local database file to Google Drive.
@@ -48,17 +41,22 @@ def upload_database(
     Returns:
         None
     """
-    if file:
-        file.connection = reconnect_drive()
-        file.upload()
-        return
-    directory = get_klt_management_directory_on_drive(driveDirectory)
-    file = directory.file(name=name)
-    if not file.exists:
-        raise FileNotFoundError(
-            f'Database file {name} not found in Drive Directory "{directory.name}".')
-    file.path = path
-    file.upload()
+    upload_local_file_to_drive(driveFile=file, drivePath=driveDirectory, filename=name, localDirectory=localDirectory)
+
+
+def open_database(
+    name: str = DATABASE_NAME, 
+    path: str = DATABASE_PATH, 
+    loadObject: Touristtax = Touristtax, 
+    TEST: bool = False
+) -> Database:
+    """
+    Get a connected database instance configured for Touristtax objects.
+    
+    Returns:
+        Database: A connected database instance.
+    """
+    return Database(name=name, path=path, loadObject=loadObject, TEST=TEST).connect()
 
 
 def open_database(
