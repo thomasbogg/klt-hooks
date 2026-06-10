@@ -10,8 +10,12 @@ class Database:
     """
     
     # Initialization and core properties
-    def __init__(self, path: str | None = None, name: str | None = None, 
-                 tables: dict[str, Table] | None = None, TEST: bool = False) -> None:
+    def __init__(
+        self, 
+        path: str | None = None, 
+        name: str | None = None, 
+        tables: dict[str, Table] | None = None, 
+        TEST: bool = False) -> None:
         """
         Initialize a new Database instance.
         

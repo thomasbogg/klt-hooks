@@ -208,7 +208,7 @@ class Row(DatabaseObject):
         values = list(self._values.values())
         insertions = ', '.join(['?' for _ in values])
         return self.database.runSQL(f'insert into {self._tablename} ({columns}) values ({insertions})', values).commit().lastRowId()
-
+    
     def update(self) -> 'Row':
         """
         Update this row in the database.

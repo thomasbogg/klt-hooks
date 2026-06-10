@@ -25,24 +25,15 @@ class Touristtax(Table):
         """
         return self._column(name='id', dataType='integer')
     
-    def chargesId(self) -> Column | Self:
+    def date(self) -> Column | Self:
         """
-        Define the chargesId column of the table.
+        Define the date column of the table.
         
         Returns:
             Touristtax: The current instance for method chaining.
         """
-        return self._column(name='chargesId', dataType='integer')
-    
-    def total(self) -> Column | Self:
-        """
-        Define the total column of the table.
-        
-        Returns:
-            Touristtax: The current instance for method chaining.
-        """
-        return self._column(name='total', dataType='real')
-    
+        return self._column(name='date', dataType='text')
+  
     def orderId(self) -> Column | Self:
         """
         Define the orderId column of the table.
@@ -51,15 +42,6 @@ class Touristtax(Table):
             Touristtax: The current instance for method chaining.
         """
         return self._column(name='orderId', dataType='text')
-    
-    def orderToken(self) -> Column | Self:
-        """
-        Define the orderToken column of the table.
-        
-        Returns:
-            Touristtax: The current instance for method chaining.
-        """
-        return self._column(name='orderToken', dataType='text')
     
     def paid(self) -> Column | Self:
         """
@@ -78,18 +60,7 @@ class Touristtax(Table):
             Touristtax: The current instance for method chaining.
         """
         self.id()
-        self.chargesId()
-        self.total()
         self.orderId()
-        self.orderToken()
+        self.date()
         self.paid()
         return self
-
-    def _get_condition(self) -> str:
-        """
-        Get the database condition to identify this price record.
-        
-        Returns:
-            A SQL condition string based on the property identifier.
-        """
-        return f'chargesId="{self._get("chargesId")}"'

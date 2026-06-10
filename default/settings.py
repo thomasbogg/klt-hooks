@@ -32,10 +32,6 @@ KLT_WEBHOOK_URL: str = 'https://klt-hooks.up.railway.app/'
 # Default language
 DEFAULT_LANGUAGE = 'EN-GB'
 
-# Database in use warning
-DATABASE_IN_USE_EMAIL_FOLDER = 'Updates with Database'
-DATABASE_IN_USE_EMAIL_SUBJECT = 'RUNNING UPDATE WITH DATABASE'
-
 
 #######################################################
 # FILESYSTEM SETTINGS
@@ -48,6 +44,10 @@ LOCAL_STORAGE_DIR: str = os.path.abspath('cache')
 # Database configuration
 DATABASE_NAME: str = os.getenv('DATABASE_NAME')
 DATABASE_PATH: str = os.path.join(DIR, DATABASE_NAME)
+
+# Database in use warning
+DATABASE_IN_USE_EMAIL_FOLDER = 'Updates with Database'
+DATABASE_IN_USE_EMAIL_SUBJECT = 'RUNNING UPDATE WITH DATABASE'
 
 
 #######################################################

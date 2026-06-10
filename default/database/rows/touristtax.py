@@ -14,48 +14,28 @@ class Touristtax(DatabaseRow):
         Args:
             database: The database connection to use for database operations
         """
-        super().__init__(database, 'touristtax', foreignKeys=['chargesId'])
+        super().__init__(database, 'touristtax')
 
     # Basic properties
     @property
-    def chargesId(self) -> int | None:
+    def date(self) -> str | None:
         """
-        Get the charges ID.
+        Get the date information.
         
         Returns:
-            The ID of the associated charges
+            The date information
         """
-        return self._get('chargesId')
+        return self._get('date')
 
-    @chargesId.setter
-    def chargesId(self, value: int) -> None:
+    @date.setter
+    def date(self, value: str) -> None:
         """
-        Set the charges ID.
+        Set the date information.
         
         Args:
-            value: The charges ID to set
+            value: The date information to set
         """
-        self._set('chargesId', value)
-
-    @property
-    def total(self) -> float | None:
-        """
-        Get the total used for this charge.
-        
-        Returns:
-            The total
-        """
-        return self._get('total')
-    
-    @total.setter
-    def total(self, value: float) -> None:
-        """
-        Set the total for this charge.
-        
-        Args:
-            value: The total to set
-        """
-        self._set('total', value)
+        self._set('date', value)
 
     @property
     def orderId(self) -> str | None:
@@ -76,26 +56,6 @@ class Touristtax(DatabaseRow):
             value: Order ID information to set
         """
         self._set('orderId', value)
-
-    @property
-    def orderToken(self) -> str | None:
-        """
-        Get order token information.
-        
-        Returns:
-            Order token information
-        """
-        return self._get('orderToken')
-    
-    @orderToken.setter
-    def orderToken(self, value: str) -> None:
-        """
-        Set order token information.
-        
-        Args:
-            value: Order token information to set
-        """
-        self._set('orderToken', value)
 
     @property
     def paid(self) -> bool | None:
