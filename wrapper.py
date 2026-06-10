@@ -5,6 +5,7 @@ from correspondence.self.functions import (
     send_email_to_self
 )
 from default.database.functions import download_database, upload_database
+from default.clear import clear_cache
 
 
 def update(func):
@@ -44,11 +45,10 @@ def pull_database(func):
         The wrapped function.
     """
     def wrapper(*args, **kwargs):
-
         driveFile = download_database()
         func(*args, **kwargs)
         upload_database(driveFile)
-
+        clear_cache()
     return wrapper
 
 

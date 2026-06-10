@@ -3,7 +3,6 @@ import hmac
 from werkzeug.datastructures import Headers
 
 from correspondence.self.functions import new_email_to_self, send_email_to_self
-from correspondence.guest.functions import new_guest_arrival_email, send_guest_email
 from default.database.rows.touristtax import Touristtax
 from default.database.database import Database
 from default.database.functions import open_database, get_touristtax_payment
