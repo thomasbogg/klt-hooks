@@ -6,4 +6,3 @@ google_auth_oauthlib
 regex
 python-dateutil
 deepl
-libsql
