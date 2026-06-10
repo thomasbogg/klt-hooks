@@ -11,4 +11,4 @@ COPY [".", "./"]
 
 EXPOSE 8080
 
-CMD ["gunicorn", "-w", "3", "-b", "0.0.0.0:8080", "--max-requests", "1000", "--max-requests-jitter", "50", "main:app"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8080", "--max-requests", "1000", "--max-requests-jitter", "50", "main:app"]

@@ -26,7 +26,7 @@ def revolut_merchant_callback():
   
     return ('', 204) # Return 204 to indicate that the callback was received, even if there was an error processing it
 
-
+"""
 @app.route("/revolut/transfer/callback", methods=["POST"])
 def revolut_transfer_callback():
     try:
@@ -53,7 +53,7 @@ def hook():
     send_email_to_self(user, message)
     return "Hello, world!"
 
-
+"""
 def _contact_self_for_error(e: str, data: str, headers: dict) -> None:
     from correspondence.self.functions import new_email_to_self, send_email_to_self
     user, message = new_email_to_self(subject = f"Error occurred: {e}")
