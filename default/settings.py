@@ -17,6 +17,7 @@ except Exception:
     load_dotenv()
     LOCAL: bool = os.getenv('LOCAL').lower() == 'true'
 
+
 #######################################################
 # APPLICATION SETTINGS
 #######################################################
@@ -34,6 +35,7 @@ DEFAULT_LANGUAGE = 'EN-GB'
 # Database in use warning
 DATABASE_IN_USE_EMAIL_FOLDER = 'Updates with Database'
 DATABASE_IN_USE_EMAIL_SUBJECT = 'RUNNING UPDATE WITH DATABASE'
+
 
 #######################################################
 # FILESYSTEM SETTINGS
@@ -155,6 +157,7 @@ REVOLUT_BUSINESS_API_REFRESH_TOKEN = os.getenv('REVOLUT_BUSINESS_API_REFRESH_TOK
 REVOLUT_BUSINESS_API_CLIENT_ASSERTION = os.getenv('REVOLUT_BUSINESS_API_CLIENT_ASSERTION')
 REVOLUT_BUSINESS_API_VERSION = os.getenv('REVOLUT_BUSINESS_API_VERSION')
 REVOLUT_BUSINESS_API_SIGNING_KEY = os.getenv('REVOLUT_BUSINESS_API_SIGNING_KEY')
+
 
 ##################################################
 # TOURIST TAX SETTINGS
