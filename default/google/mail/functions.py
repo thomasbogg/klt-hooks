@@ -10,7 +10,6 @@ from libraries.google.mail.utils import (
     get_google_mail_user,
     get_refreshed_google_mail_connection
 )
-from default.booking.booking import Booking
 from default.dates import dates
 from default.settings import DEFAULT_ACCOUNT
 from libraries.utils import logwarning
@@ -256,7 +255,6 @@ def send_email(
 
 # Email validation function
 def valid_email_address(
-    booking: Booking | None = None, 
     address: str | None = None, 
     verbose: bool = False
 ) -> bool:
@@ -280,15 +278,4 @@ def valid_email_address(
             logwarning(f'Invalid email address: {address}')
         return False
   
-    if not booking or not booking.guest:
-        if verbose:
-            logwarning(f'No booking/guest given for email check: {booking=}')
-        return False
-   
-    if not booking.guest.email or '@' not in booking.guest.email:
-        if verbose:
-            logwarning(f'Invalid email address for {booking.guest.prettyName} to '
-                      f'{booking.property.name}: {booking.guest.email}')
-        return False
-    
     return True
