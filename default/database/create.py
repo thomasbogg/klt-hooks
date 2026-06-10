@@ -1,8 +1,6 @@
 from libraries.database.column import Column
 from libraries.database.database import Database
 from libraries.database.table import Table
-from libraries.dates import dates
-from default.settings import DEFAULT_LANGUAGE
 
 
 def create_database() -> Database:
