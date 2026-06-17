@@ -70,5 +70,5 @@ def _get_touristtax_payment(database: Database, orderId: str) -> Touristtax | No
     Returns:
         The Touristtax object associated with the order ID, or None if not found.
     """
-    search = get_touristtax_payment(database, orderId)
+    search = get_touristtax_payment(database, orderId=orderId)
     return search.fetchone()
