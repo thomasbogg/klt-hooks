@@ -1,5 +1,6 @@
 from datetime import date
 from ssl import SSLEOFError, SSLError
+import time
 
 from libraries.google.account import GoogleAccount
 from libraries.google.connect import GoogleAPIService
@@ -31,21 +32,23 @@ def ssl_exception_handler(func):
         The wrapped function that handles SSL exceptions.
     """
     def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (SSLEOFError, SSLError) as e:
-            logwarning(
-                f'SSL error in Google Mail call {func.__name__}, reconnecting and retrying once: {e}'
-            )
-            for arg in list(args) + list(kwargs.values()):
-                if isinstance(arg, (GoogleMailMessages, GoogleMailMessage)):
-                    if (
-                        arg.connection.connectionTime >= 
-                        _MAIL_CONNECTION.connectionTime
-                    ):
-                        reconnect()
-                    arg.connection = _MAIL_CONNECTION
-            return func(*args, **kwargs)
+        for attempt in range(3):
+            try:
+                return func(*args, **kwargs)
+            except (SSLEOFError, SSLError) as e:
+                if attempt >= 2:
+                    raise
+
+                logwarning(
+                    f'SSL error in Google Mail call {func.__name__}, '
+                    f'reconnecting and retrying in {2 ** attempt}s: {e}'
+                )
+                time.sleep(2 ** attempt)
+                reconnect()
+
+                for arg in list(args) + list(kwargs.values()):
+                    if isinstance(arg, (GoogleMailMessages, GoogleMailMessage)):
+                        arg.connection = _MAIL_CONNECTION
     return wrapper
 
 

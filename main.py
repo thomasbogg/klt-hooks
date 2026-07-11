@@ -3,6 +3,7 @@ import json
 import os
 from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
 from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY
+from correspondence.self.functions import contact_self
 
 
 app = Flask(__name__)
@@ -26,12 +27,10 @@ def revolut_merchant_callback():
 
 
 def _contact_self_for_error(e: str, data: str, headers: dict) -> None:
-    from correspondence.self.functions import new_email_to_self, send_email_to_self
-    user, message = new_email_to_self(subject = f"Error occurred: {e}")
-    message.body.paragraph(f"Error: {e}")
-    message.body.paragraph(f"Data: {data}")
-    message.body.paragraph(f"Headers: {headers}")
-    send_email_to_self(user, message)
+    contact_self(
+        subject=f"Error occurred: {e}",
+        body=f"Error: {e}\nData: {data}\nHeaders: {headers}",
+    )
 
 
 if __name__ == "__main__":

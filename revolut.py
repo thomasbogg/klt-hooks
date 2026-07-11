@@ -2,7 +2,7 @@ import hashlib
 import hmac
 from werkzeug.datastructures import Headers
 
-from correspondence.self.functions import new_email_to_self, send_email_to_self
+from correspondence.self.functions import contact_self
 from default.database.rows.touristtax import Touristtax
 from default.database.database import Database
 from default.database.functions import open_database, get_touristtax_payment
@@ -49,14 +49,17 @@ def verify_revolut_payload_signature(headers: Headers, raw_data: bytes, signing_
 
 
 def log_invalid_revolut_callback(timestamp, payload_to_sign, signature, received_signature, signing_secret):
-    user, message = new_email_to_self(subject = "Invalid Revolut callback received")
-    message.body.paragraph("Received an invalid Revolut callback. The payload signature verification failed.")
-    message.body.paragraph(f"Timestamp: {timestamp}")
-    message.body.paragraph(f"Payload to sign: {payload_to_sign}")
-    message.body.paragraph(f"Calculated signature: {signature}")
-    message.body.paragraph(f"Received signature: {received_signature}")
-    message.body.paragraph(f"Signing key used: {signing_secret}")
-    send_email_to_self(user, message)
+    contact_self(
+        subject="Invalid Revolut callback received",
+        body=(
+            "Received an invalid Revolut callback. The payload signature verification failed.\n"
+            f"Timestamp: {timestamp}\n"
+            f"Payload to sign: {payload_to_sign}\n"
+            f"Calculated signature: {signature}\n"
+            f"Received signature: {received_signature}\n"
+            f"Signing key used: {signing_secret}"
+        ),
+    )
 
 
 def _get_touristtax_payment(database: Database, orderId: str) -> Touristtax | None:

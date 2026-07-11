@@ -1,9 +1,6 @@
 import traceback
 
-from correspondence.self.functions import (
-    new_email_to_self,
-    send_email_to_self
-)
+from correspondence.self.functions import contact_self
 from default.database.functions import download_database, upload_database
 from default.clear import clear_cache
 
@@ -63,6 +60,4 @@ def _contact_self(subject: str, body: str) -> None:
     Returns:
         None
     """
-    user, message = new_email_to_self(subject=subject)
-    message.body.paragraph(body)
-    send_email_to_self(user, message)
+    contact_self(subject=subject, body=body)

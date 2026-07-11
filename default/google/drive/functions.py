@@ -34,40 +34,40 @@ def exception_handlers(func):
         The wrapped function that handles SSL exceptions.
     """
     def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except SSLEOFError:
-            logwarning('SSL Error occurred, reconnecting to Google Drive...')
-           
-            for arg in list(args) + list(kwargs.values()):
-                if isinstance(arg, (GoogleDriveFile, GoogleDriveDirectory)):
-           
-                    if (
-                        arg.connection.connectionTime >= 
-                        _DRIVES_CONNECTION.connectionTime
-                    ):
+        for attempt in range(3):
+            try:
+                return func(*args, **kwargs)
+            except SSLEOFError:
+                if attempt >= 2:
+                    raise
+
+                logwarning(
+                    f'SSL Error occurred, reconnecting to Google Drive in {2 ** attempt}s...'
+                )
+                time.sleep(2 ** attempt)
+                reconnect()
+
+                for arg in list(args) + list(kwargs.values()):
+                    if isinstance(arg, (GoogleDriveFile, GoogleDriveDirectory)):
+                        arg.connection = _DRIVES_CONNECTION
+            except TimeoutError:
+                logwarning(
+                    'Timeout occurred, waiting 5 seconds and reconnecting '
+                    'to Google Drive...')
+                time.sleep(5)
+                reconnect()
+                return func(*args, **kwargs)
+            except BrokenPipeError:
+                logwarning(
+                    'Broken pipe occurred during Google Drive transfer, '
+                    'reconnecting and retrying...')
+
+                for arg in list(args) + list(kwargs.values()):
+                    if isinstance(arg, (GoogleDriveFile, GoogleDriveDirectory)):
                         reconnect()
-                    arg.connection = _DRIVES_CONNECTION
+                        arg.connection = _DRIVES_CONNECTION
 
-            return func(*args, **kwargs)
-        except TimeoutError:
-            logwarning(
-                'Timeout occurred, waiting 5 seconds and reconnecting '
-                'to Google Drive...')
-            time.sleep(5)
-            reconnect()
-            return func(*args, **kwargs)
-        except BrokenPipeError:
-            logwarning(
-                'Broken pipe occurred during Google Drive transfer, '
-                'reconnecting and retrying...')
-
-            for arg in list(args) + list(kwargs.values()):
-                if isinstance(arg, (GoogleDriveFile, GoogleDriveDirectory)):
-                    reconnect()
-                    arg.connection = _DRIVES_CONNECTION
-
-            return func(*args, **kwargs)
+                return func(*args, **kwargs)
     return wrapper
 
 

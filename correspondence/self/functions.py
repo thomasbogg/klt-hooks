@@ -1,9 +1,10 @@
-from default.google.mail.functions import get_default_user, get_inbox, new_email
+from default.google.mail.functions import get_default_user, get_inbox, new_email, send_email
 from default.settings import DEFAULT_ACCOUNT
 from libraries.google.account import GoogleAccount
 from libraries.google.mail.message import GoogleMailMessage
 from libraries.google.mail.messages import GoogleMailMessages
 from libraries.dates import dates
+from libraries.utils import logwarning
 
 
 #######################################################
@@ -62,5 +63,24 @@ def send_email_to_self(
     if not user:
         user = get_default_user()
     #if not get_inbox(user=user, sender=user.account.emailAddress, subject=message.subject):
-    message.send()
+    send_email(user, message)
+    return None
+
+
+def contact_self(
+        subject: str,
+        body: str,
+        account: GoogleAccount = DEFAULT_ACCOUNT) -> None:
+    """
+    Best-effort helper for sending a notification email to self.
+
+    Any error while preparing or sending the message is logged and suppressed
+    so notification failures do not break the caller.
+    """
+    try:
+        user, message = new_email_to_self(account=account, subject=subject)
+        message.body.paragraph(body)
+        send_email_to_self(user, message)
+    except Exception as e:
+        logwarning(f'Failed to send email notification to self: {e}')
     return None
