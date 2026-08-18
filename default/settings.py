@@ -167,6 +167,13 @@ REVOLUT_BUSINESS_API_CLIENT_ASSERTION = os.getenv('REVOLUT_BUSINESS_API_CLIENT_A
 REVOLUT_BUSINESS_API_VERSION = os.getenv('REVOLUT_BUSINESS_API_VERSION')
 REVOLUT_BUSINESS_API_SIGNING_KEY = os.getenv('REVOLUT_BUSINESS_API_SIGNING_KEY')
 
+# Wise webhook automation is paused (2026-08-18) - Personal API tokens can't retrieve balance
+# statements for Portugal-based accounts, which blocked automated reference matching. Left unset
+# deliberately: this is Wise's real *production* public key, which was never confirmed (only a
+# labelled-sandbox key was found) - see wise.py::verify_wise_payload_signature(), which treats an
+# unset key as "verification not yet active" rather than silently trusting an unconfirmed one.
+WISE_WEBHOOK_PUBLIC_KEY = os.getenv('WISE_WEBHOOK_PUBLIC_KEY', '')
+
 
 ##################################################
 # TOURIST TAX SETTINGS

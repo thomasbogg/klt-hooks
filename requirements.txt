@@ -2,6 +2,7 @@ flask
 python-dotenv
 gunicorn
 psycopg[binary]
+cryptography
 google-api-python-client
 google_auth_oauthlib
 regex

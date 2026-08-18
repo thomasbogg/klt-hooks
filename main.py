@@ -2,9 +2,10 @@ from flask import Flask, request
 import json
 import os
 from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
-from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY
+from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY
 from correspondence.self.functions import contact_self
 from postgres_bookings import IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_paid, mark_payment_failed
+from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
 
 app = Flask(__name__)
@@ -59,21 +60,27 @@ def revolut_booking_deposit_callback():
 
 @app.route("/wise/balance-update-callback", methods=["POST"])
 def wise_balance_update_callback():
-    """Receives Wise's 'Account deposit events' (balances#update) webhook - registered manually via
-    the Wise account UI, not the API, so there's no signing secret to load from settings the way the
-    Revolut routes have. Interim/bootstrap version: NOT SIGNATURE-VERIFIED YET (Wise verifies via
-    RSA-SHA256 against their published public key, not a per-subscription secret - the key itself
-    still needs pinning down) and doesn't yet look anything up or mark anything paid - it only logs
-    what arrives so a real event's exact shape can be inspected. Do not wire this to
-    postgres_bookings.py-style payment confirmation until signature verification is added; until
-    then this endpoint must not be trusted to represent a real, unforged payment notification.
+    """Receives Wise's account-deposit webhook. Wise automation is paused as of 2026-08-18 -
+    Personal API tokens can't retrieve balance statements for Portugal-based accounts, which
+    blocks the reference-matching this would need to actually confirm a payment - so this stays
+    logging-only. Do not wire this to postgres_bookings.py-style payment confirmation until that's
+    resolved. Signature verification is real (RSA-SHA256 against WISE_WEBHOOK_PUBLIC_KEY, see
+    wise.py) but the key itself is currently unset - see default/settings.py for why - so every
+    request fails verification for now. That's expected given this is a public URL with no other
+    auth, so it's only escalated (via email) when a key IS configured and still fails; while unset,
+    failures are just logged, not emailed, to avoid spamming on ordinary/test traffic.
     """
     is_test = request.headers.get('X-Test-Notification', '').lower() == 'true'
+    verified = verify_wise_payload_signature(request.headers, request.data, WISE_WEBHOOK_PUBLIC_KEY)
+
+    if not verified and WISE_WEBHOOK_PUBLIC_KEY:
+        log_invalid_wise_callback(dict(request.headers), request.data.decode('utf-8', errors='replace'))
+
     try:
         data = json.loads(request.data)
-        print(f"[wise webhook] test={is_test} event_type={data.get('event_type')} data={data.get('data')}", flush=True)
+        print(f"[wise webhook] verified={verified} test={is_test} event_type={data.get('event_type')} data={data.get('data')}", flush=True)
     except Exception as e:
-        print(f"[wise webhook] failed to parse body: {e} - raw: {request.data.decode('utf-8', errors='replace')}", flush=True)
+        print(f"[wise webhook] verified={verified} failed to parse body: {e} - raw: {request.data.decode('utf-8', errors='replace')}", flush=True)
 
     return {"status": "ok"}, 200
 
