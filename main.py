@@ -57,6 +57,27 @@ def revolut_booking_deposit_callback():
     return ('', 204)
 
 
+@app.route("/wise/balance-update-callback", methods=["POST"])
+def wise_balance_update_callback():
+    """Receives Wise's 'Account deposit events' (balances#update) webhook - registered manually via
+    the Wise account UI, not the API, so there's no signing secret to load from settings the way the
+    Revolut routes have. Interim/bootstrap version: NOT SIGNATURE-VERIFIED YET (Wise verifies via
+    RSA-SHA256 against their published public key, not a per-subscription secret - the key itself
+    still needs pinning down) and doesn't yet look anything up or mark anything paid - it only logs
+    what arrives so a real event's exact shape can be inspected. Do not wire this to
+    postgres_bookings.py-style payment confirmation until signature verification is added; until
+    then this endpoint must not be trusted to represent a real, unforged payment notification.
+    """
+    is_test = request.headers.get('X-Test-Notification', '').lower() == 'true'
+    try:
+        data = json.loads(request.data)
+        print(f"[wise webhook] test={is_test} event_type={data.get('event_type')} data={data.get('data')}", flush=True)
+    except Exception as e:
+        print(f"[wise webhook] failed to parse body: {e} - raw: {request.data.decode('utf-8', errors='replace')}", flush=True)
+
+    return {"status": "ok"}, 200
+
+
 def _contact_self_for_error(e: str, data: str, headers: dict) -> None:
     contact_self(
         subject=f"Error occurred: {e}",
