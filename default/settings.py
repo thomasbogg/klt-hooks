@@ -45,6 +45,15 @@ LOCAL_STORAGE_DIR: str = os.path.abspath('cache')
 DATABASE_NAME: str = os.getenv('DATABASE_NAME')
 DATABASE_PATH: str = os.path.join(DIR, DATABASE_NAME)
 
+# Shared Postgres (Railway) - the actual database klt-web's Django app reads/writes. Distinct var
+# names from DATABASE_NAME above, which is klt-hooks' own legacy local SQLite file - not the same
+# database. Used only by postgres_bookings.py, kept separate from the default/database/ SQLite layer.
+POSTGRES_DATABASE_HOST: str = os.getenv('POSTGRES_DATABASE_HOST')
+POSTGRES_DATABASE_PORT: str = os.getenv('POSTGRES_DATABASE_PORT', '5432')
+POSTGRES_DATABASE_NAME: str = os.getenv('POSTGRES_DATABASE_NAME')
+POSTGRES_DATABASE_USER: str = os.getenv('POSTGRES_DATABASE_USER')
+POSTGRES_DATABASE_PASSWORD: str = os.getenv('POSTGRES_DATABASE_PASSWORD')
+
 
 #######################################################
 # PROPERTY SETTINGS
@@ -148,6 +157,10 @@ REVOLUT_MERCHANT_API_SECRET_KEY = os.getenv('REVOLUT_MERCHANT_API_SECRET_KEY')
 REVOLUT_MERCHANT_API_SIGNING_KEY = os.getenv('REVOLUT_MERCHANT_API_SIGNING_KEY')
 REVOLUT_MERCHANT_API_VERSION = os.getenv('REVOLUT_MERCHANT_API_VERSION')
 REVOLUT_BASE_PAYMENT_LINK = 'https://checkout.revolut.com/payment-link/'
+
+# Separate webhook subscription from the tourist-tax one above - registered via klt-web's
+# bookings/management/commands/register_revolut_deposit_webhook.py, own signing secret.
+REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY = os.getenv('REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY')
 
 REVOLUT_BUSINESS_API_REFRESH_TOKEN = os.getenv('REVOLUT_BUSINESS_API_REFRESH_TOKEN')
 REVOLUT_BUSINESS_API_CLIENT_ASSERTION = os.getenv('REVOLUT_BUSINESS_API_CLIENT_ASSERTION')
