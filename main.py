@@ -4,7 +4,7 @@ import os
 from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
 from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY
 from correspondence.self.functions import contact_self
-from postgres_bookings import IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_paid, mark_payment_failed
+from postgres_bookings import IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_authenticated, mark_payment_paid, mark_payment_failed
 from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
 
@@ -41,8 +41,18 @@ def revolut_booking_deposit_callback():
 
             if event in IN_PROGRESS_EVENTS:
                 found = mark_payment_in_progress(order_id, event)
+            elif event == 'ORDER_PAYMENT_AUTHENTICATED':
+                found = mark_payment_authenticated(order_id)
             elif event == 'ORDER_COMPLETED':
-                found = mark_payment_paid(order_id)
+                result = mark_payment_paid(order_id)
+                found = result != 'not_found'
+                if result == 'conflict':
+                    _contact_self_for_error(
+                        f"Payment received for order {order_id} but its dates now conflict with another "
+                        f"booking - flagged as 'Payment received - needs review', calendar NOT double-booked. "
+                        f"Manually resolve which guest keeps the dates (refund one, or contact them to rebook).",
+                        request.data.decode('utf-8'), dict(request.headers),
+                    )
             elif event in FAILURE_STATUS_BY_EVENT:
                 found = mark_payment_failed(order_id, event)
             else:

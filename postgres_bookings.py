@@ -8,6 +8,8 @@ Schema is owned by klt-web's Django migrations (bookings/models.py) - this modul
 migration-time safety net against a future column rename there. If a webhook starts failing after
 a klt-web schema change, check bookings/models.py::Booking/Payment first.
 """
+from datetime import timedelta
+
 import psycopg
 
 from default.settings import (
@@ -18,16 +20,39 @@ from default.settings import (
     POSTGRES_DATABASE_PASSWORD,
 )
 
+# ORDER_PAYMENT_AUTHENTICATED is deliberately NOT here - it gets its own handling (see
+# mark_payment_authenticated below), since it's the point a Revolut bank-transfer payment can go
+# quiet for up to 2 business days before ORDER_COMPLETED, unlike these two which just mean "guest
+# still clicking through checkout".
 IN_PROGRESS_EVENTS = (
     'ORDER_PAYMENT_AUTHORISATION_STARTED',
     'ORDER_PAYMENT_AUTHENTICATION_CHALLENGED',
-    'ORDER_PAYMENT_AUTHENTICATED',
 )
 FAILURE_STATUS_BY_EVENT = {
     'ORDER_PAYMENT_DECLINED': 'declined',
     'ORDER_PAYMENT_FAILED': 'failed',
     'ORDER_CANCELLED': 'cancelled',
 }
+
+# Booking status literals duplicated from klt-web's env_settings.py (VALID_BOOKING_STATUSES,
+# PROVISIONAL_BOOKING_STATUSES) - this module can't import klt-web's Django code (separate
+# deployables, see module docstring above). Keep in sync if either tuple changes there. Lists, not
+# tuples: psycopg3 (unlike psycopg2) doesn't expand a tuple parameter into an IN-list - these are
+# passed to = ANY(%s) instead, which needs a list/array.
+_BLOCKING_VALID_STATUSES = ['Booking confirmed', 'Guests have departed', 'Guests on-site', 'Holiday completed']
+_BLOCKING_PROVISIONAL_STATUSES = ['Provisional booking', 'Dates agreed and held', 'Awaiting payment']
+
+
+def _add_business_days(start, business_days):
+    """Mirrors bookings/utils.py::add_business_days() in klt-web - keep them in sync if that
+    changes. Duplicated rather than imported: this module can't import klt-web's Django code."""
+    current = start
+    added = 0
+    while added < business_days:
+        current += timedelta(days=1)
+        if current.weekday() < 5:  # Monday-Friday
+            added += 1
+    return current
 
 
 def _connect():
@@ -74,8 +99,49 @@ def mark_payment_in_progress(order_id: str, event_type: str) -> bool:
     return True
 
 
-def mark_payment_paid(order_id: str) -> bool:
-    """Deposit paid in full - confirm the booking. Returns False if no Payment row matches order_id."""
+def mark_payment_authenticated(order_id: str) -> bool:
+    """ORDER_PAYMENT_AUTHENTICATED: the guest approved payment at their own bank. Card payments
+    settle in seconds from here (ORDER_COMPLETED will already have fired or fires imminently);
+    Open Banking bank transfers can take up to 2 business days to clear. Since Revolut doesn't
+    expose which payment method was used, swap the hold to the full payment-clearing window rather
+    than the short flat extension used for the pre-authentication events - see bookings/utils.py's
+    payment_clearing_expiry() in klt-web for the equivalent Wise-path logic. Returns False if no
+    Payment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_payments
+                SET status = 'in_progress', last_event_type = 'ORDER_PAYMENT_AUTHENTICATED', in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id, in_progress_at
+                """,
+                (order_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return False
+            booking_id, in_progress_at = row
+
+            cur.execute("SELECT payment_clearing_business_days FROM booking_settings WHERE id = 1")
+            (business_days,) = cur.fetchone()
+            new_hold_expiry = _add_business_days(in_progress_at, business_days)
+
+            cur.execute(
+                "UPDATE bookings SET hold_expires_at = %s WHERE id = %s",
+                (new_hold_expiry, booking_id),
+            )
+        conn.commit()
+    return True
+
+
+def mark_payment_paid(order_id: str) -> str:
+    """Deposit paid in full. Confirms the booking unless its dates now conflict with another
+    booking that currently holds the calendar (e.g. this hold expired and someone else's booking
+    legitimately took the dates before this late ORDER_COMPLETED arrived) - in that case the
+    payment is still recorded as paid (the money is real), but the booking is flipped to a
+    non-blocking 'needs review' status instead of 'Booking confirmed', and the caller is expected
+    to alert a human (see main.py). Returns 'not_found', 'confirmed', or 'conflict'."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -89,19 +155,44 @@ def mark_payment_paid(order_id: str) -> bool:
             )
             row = cur.fetchone()
             if row is None:
-                return False
+                return 'not_found'
             booking_id = row[0]
 
             cur.execute(
-                """
-                UPDATE bookings
-                SET enquiry_status = 'Booking confirmed', last_updated = now()
-                WHERE id = %s
-                """,
+                "SELECT property_id, arrival_date, departure_date FROM bookings WHERE id = %s",
                 (booking_id,),
             )
+            property_id, arrival_date, departure_date = cur.fetchone()
+
+            # Mirrors BookingQuerySet.holding()/overlapping() in klt-web's bookings/models.py.
+            cur.execute(
+                """
+                SELECT 1 FROM bookings
+                WHERE property_id = %s
+                  AND id != %s
+                  AND arrival_date < %s
+                  AND departure_date > %s
+                  AND (
+                    enquiry_status = ANY(%s)
+                    OR (enquiry_status = ANY(%s) AND hold_expires_at IS NULL)
+                    OR (enquiry_status = ANY(%s) AND hold_expires_at > now())
+                  )
+                LIMIT 1
+                """,
+                (
+                    property_id, booking_id, departure_date, arrival_date,
+                    _BLOCKING_VALID_STATUSES, _BLOCKING_PROVISIONAL_STATUSES, _BLOCKING_PROVISIONAL_STATUSES,
+                ),
+            )
+            conflict = cur.fetchone() is not None
+
+            status = 'Payment received - needs review' if conflict else 'Booking confirmed'
+            cur.execute(
+                "UPDATE bookings SET enquiry_status = %s, last_updated = now() WHERE id = %s",
+                (status, booking_id),
+            )
         conn.commit()
-    return True
+    return 'conflict' if conflict else 'confirmed'
 
 
 def mark_payment_failed(order_id: str, event_type: str) -> bool:
