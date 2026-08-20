@@ -33,6 +33,7 @@ def revolut_booking_deposit_callback():
     """Separate webhook subscription (own signing key, own event list) from the tourist-tax route
     above - writes into klt-web's shared Postgres tables via postgres_bookings.py, not the legacy
     SQLite layer default/database/ uses. See bookings/models.py::Payment in klt-web."""
+    return ('', 204)
     try:
         if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY):
             data = json.loads(request.data)
