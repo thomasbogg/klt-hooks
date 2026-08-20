@@ -4,7 +4,11 @@ import os
 from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
 from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY
 from correspondence.self.functions import contact_self
-from postgres_bookings import IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_authenticated, mark_payment_paid, mark_payment_failed
+from postgres_bookings import (
+    IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_authenticated,
+    mark_payment_paid, mark_payment_failed, mark_balance_payment_in_progress, mark_balance_payment_paid,
+    mark_balance_payment_failed,
+)
 from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
 
@@ -30,9 +34,17 @@ def revolut_merchant_callback():
 
 @app.route("/revolut/booking-deposit-callback", methods=["POST"])
 def revolut_booking_deposit_callback():
-    """Separate webhook subscription (own signing key, own event list) from the tourist-tax route
-    above - writes into klt-web's shared Postgres tables via postgres_bookings.py, not the legacy
-    SQLite layer default/database/ uses. See bookings/models.py::Payment in klt-web."""
+    """Deposit AND balance payment events for klt-web bookings (own signing key, own event list,
+    separate from the tourist-tax route above) - writes into klt-web's shared Postgres tables via
+    postgres_bookings.py, not the legacy SQLite layer default/database/ uses. See
+    bookings/models.py::Payment/BalancePayment in klt-web.
+
+    SUSPENDED as of 2026-08-20 (the bare 204 below) - Revolut delivers every event to every
+    registered webhook on the account regardless of which one "owns" it, so this route was seeing
+    the legacy tourist-tax route's own callbacks too and alerting on them as unrecognised. Stays
+    off until the tourist-tax route is retired (it's on the old system klt-web is replacing, not
+    this one) - re-enabling before then just reintroduces the same false-alert noise. The dispatch
+    below (deposit first, balance as a fallback) is otherwise ready to go once that's resolved."""
     return ('', 204)
     try:
         if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY):
@@ -40,10 +52,13 @@ def revolut_booking_deposit_callback():
             event = data['event']
             order_id = data['order_id']
 
-            if event in IN_PROGRESS_EVENTS:
-                found = mark_payment_in_progress(order_id, event)
-            elif event == 'ORDER_PAYMENT_AUTHENTICATED':
-                found = mark_payment_authenticated(order_id)
+            if event in IN_PROGRESS_EVENTS or event == 'ORDER_PAYMENT_AUTHENTICATED':
+                if event in IN_PROGRESS_EVENTS:
+                    found = mark_payment_in_progress(order_id, event)
+                else:
+                    found = mark_payment_authenticated(order_id)
+                if not found:
+                    found = mark_balance_payment_in_progress(order_id, event)
             elif event == 'ORDER_COMPLETED':
                 result = mark_payment_paid(order_id)
                 found = result != 'not_found'
@@ -54,8 +69,12 @@ def revolut_booking_deposit_callback():
                         f"Manually resolve which guest keeps the dates (refund one, or contact them to rebook).",
                         request.data.decode('utf-8'), dict(request.headers),
                     )
+                elif not found:
+                    found = mark_balance_payment_paid(order_id)
             elif event in FAILURE_STATUS_BY_EVENT:
                 found = mark_payment_failed(order_id, event)
+                if not found:
+                    found = mark_balance_payment_failed(order_id, event)
             else:
                 _contact_self_for_error(f"Received unexpected event type: {event}", request.data.decode('utf-8'), dict(request.headers))
                 found = True

@@ -1,4 +1,5 @@
-"""Writes booking-deposit payment state directly into klt-web's shared Postgres database.
+"""Writes booking-deposit and booking-balance payment state directly into klt-web's shared
+Postgres database.
 
 Deliberately separate from default/database/ - that's the legacy SQLite framework (synced to/from
 Google Drive via wrapper.py's @pull_database), which is a different, disconnected database from
@@ -6,7 +7,7 @@ this one. Do NOT decorate anything here with that machinery.
 
 Schema is owned by klt-web's Django migrations (bookings/models.py) - this module has no
 migration-time safety net against a future column rename there. If a webhook starts failing after
-a klt-web schema change, check bookings/models.py::Booking/Payment first.
+a klt-web schema change, check bookings/models.py::Booking/Payment/BalancePayment first.
 """
 from datetime import timedelta
 
@@ -226,3 +227,76 @@ def mark_payment_failed(order_id: str, event_type: str) -> bool:
             )
         conn.commit()
     return True
+
+
+# --- Balance-payment mutators (booking_balance_payments, klt-web's BalancePayment model) -------
+#
+# Deliberately NOT a "try booking_payments, then fall back to booking_balance_payments" branch
+# bolted onto the four functions above: the deposit stage's hold-extension/date-conflict logic
+# exists because the deposit is what holds the calendar slot open. By the time a balance payment
+# exists at all, the booking is already confirmed and the slot is already locked in - there's no
+# hold to extend and no conflict to check, so these are deliberately simpler, standalone functions
+# rather than reused/branched versions of the deposit ones. As of 2026-08-20 these are wired but
+# unreachable in production - see main.py's revolut_booking_deposit_callback(), whose route-level
+# guard returns before any dispatch code (deposit or balance) ever runs.
+
+def mark_balance_payment_in_progress(order_id: str, event_type: str) -> bool:
+    """Covers IN_PROGRESS_EVENTS and ORDER_PAYMENT_AUTHENTICATED alike - unlike the deposit
+    version, there's no hold to extend either way, so both collapse to the same simple status
+    update. Returns False if no BalancePayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_balance_payment_paid(order_id: str) -> bool:
+    """Balance paid in full. No conflict check and no enquiry_status change - the booking is
+    already 'Booking confirmed' from the deposit stage, and there's no separate status literal for
+    "balance also paid" in klt-web's env_settings.VALID_BOOKING_STATUSES to set it to. Returns
+    False if no BalancePayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_balance_payment_failed(order_id: str, event_type: str) -> bool:
+    """Balance payment explicitly declined/failed/cancelled - just record it, since there's no
+    hold to release and the booking's own enquiry_status stays 'Booking confirmed' either way (the
+    guest can simply retry). Returns False if no BalancePayment row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
