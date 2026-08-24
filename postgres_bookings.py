@@ -40,8 +40,13 @@ FAILURE_STATUS_BY_EVENT = {
 # deployables, see module docstring above). Keep in sync if either tuple changes there. Lists, not
 # tuples: psycopg3 (unlike psycopg2) doesn't expand a tuple parameter into an IN-list - these are
 # passed to = ANY(%s) instead, which needs a list/array.
-_BLOCKING_VALID_STATUSES = ['Booking confirmed', 'Guests have departed', 'Guests on-site', 'Holiday completed']
-_BLOCKING_PROVISIONAL_STATUSES = ['Provisional booking', 'Dates agreed and held', 'Awaiting payment']
+#
+# Trimmed 2026-08-25 to match klt-web: 'Guests have departed'/'Guests on-site'/'Holiday completed'
+# and 'Provisional booking'/'Dates agreed and held' were PIMS-inherited status labels nothing ever
+# actually set on either side - klt-web's booking_stage() always derived "started"/"ended" purely
+# from arrival_date/departure_date, never from which one of these a booking had.
+_BLOCKING_VALID_STATUSES = ['Booking confirmed']
+_BLOCKING_PROVISIONAL_STATUSES = ['Awaiting payment']
 
 
 def _add_business_days(start, business_days):

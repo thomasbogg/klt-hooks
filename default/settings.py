@@ -66,12 +66,11 @@ PROPERTIES: tuple[str, ...] = (
     'Parque da Corcovada'
 )
 
-# Valid booking status values
+# Valid booking status values. Trimmed 2026-08-25 to match klt-web's env_settings.py - see
+# postgres_bookings.py's _BLOCKING_VALID_STATUSES comment for why. Not actually imported/used
+# anywhere in klt-hooks (postgres_bookings.py keeps its own separate copy for the real logic).
 VALID_BOOKING_STATUSES: tuple[str, ...] = (
     'Booking confirmed',
-    'Guests have departed', 
-    'Guests on-site', 
-    'Holiday completed'
 )
 
 
