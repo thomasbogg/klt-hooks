@@ -8,7 +8,8 @@ from postgres_bookings import (
     IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_authenticated,
     mark_payment_paid, mark_payment_failed, mark_balance_payment_in_progress, mark_balance_payment_paid,
     mark_balance_payment_failed, mark_tourist_tax_in_progress, mark_tourist_tax_paid, mark_tourist_tax_failed,
-    mark_supplementary_payment_in_progress, mark_supplementary_payment_paid, mark_supplementary_payment_failed,
+    mark_supplementary_payment_in_progress, mark_supplementary_payment_authenticated,
+    mark_supplementary_payment_paid, mark_supplementary_payment_failed,
 )
 from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
@@ -71,7 +72,16 @@ def revolut_booking_deposit_callback():
                 if not found:
                     found = mark_tourist_tax_in_progress(order_id, event)
                 if not found:
-                    found = mark_supplementary_payment_in_progress(order_id, event)
+                    # Unlike the balance/tourist-tax fallbacks above, this one keeps the deposit's
+                    # own in-progress/authenticated split (see mark_supplementary_payment_
+                    # authenticated()'s own docstring) - a kind='date_change' row holds real
+                    # calendar dates the same way the deposit's own booking does, so it deserves
+                    # the same fidelity; balance/tourist-tax don't hold any dates at all by this
+                    # stage, so a flat extension has always been enough for them.
+                    if event in IN_PROGRESS_EVENTS:
+                        found = mark_supplementary_payment_in_progress(order_id, event)
+                    else:
+                        found = mark_supplementary_payment_authenticated(order_id)
             elif event == 'ORDER_COMPLETED':
                 result = mark_payment_paid(order_id)
                 found = result != 'not_found'

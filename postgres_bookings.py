@@ -391,13 +391,21 @@ def mark_tourist_tax_failed(order_id: str, event_type: str) -> bool:
 # this dormant pipeline already has while it's off.
 
 def mark_supplementary_payment_in_progress(order_id: str, event_type: str) -> bool:
-    """Returns False if no SupplementaryPayment row matches order_id."""
+    """Payment attempt detected but not yet resolved - extends hold_expires_at the same way
+    mark_payment_in_progress() does for a brand-new reservation's own hold, so a kind='date_change'
+    row's requested dates don't lose their hold mid-payment (harmless no-op update for
+    kind='guest_add', which never sets hold_expires_at in the first place). Returns False if no
+    SupplementaryPayment row matches order_id."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE booking_supplementary_payments
-                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now(),
+                    hold_expires_at = now() + (
+                        SELECT (revolut_hold_extension_minutes || ' minutes')::interval
+                        FROM booking_settings WHERE id = 1
+                    )
                 WHERE revolut_order_id = %s
                 RETURNING booking_id
                 """,
@@ -406,6 +414,38 @@ def mark_supplementary_payment_in_progress(order_id: str, event_type: str) -> bo
             found = cur.fetchone() is not None
         conn.commit()
     return found
+
+
+def mark_supplementary_payment_authenticated(order_id: str) -> bool:
+    """ORDER_PAYMENT_AUTHENTICATED - swaps the hold to the full payment-clearing window, mirroring
+    mark_payment_authenticated() exactly (see its own docstring for why). Returns False if no
+    SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'in_progress', last_event_type = 'ORDER_PAYMENT_AUTHENTICATED', in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id, in_progress_at
+                """,
+                (order_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return False
+            booking_id, in_progress_at = row
+
+            cur.execute("SELECT payment_clearing_business_days FROM booking_settings WHERE id = 1")
+            (business_days,) = cur.fetchone()
+            new_hold_expiry = _add_business_days(in_progress_at, business_days)
+
+            cur.execute(
+                "UPDATE booking_supplementary_payments SET hold_expires_at = %s WHERE revolut_order_id = %s",
+                (new_hold_expiry, order_id),
+            )
+        conn.commit()
+    return True
 
 
 def mark_supplementary_payment_paid(order_id: str) -> bool:
