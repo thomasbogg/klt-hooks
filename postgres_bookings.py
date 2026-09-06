@@ -305,3 +305,143 @@ def mark_balance_payment_failed(order_id: str, event_type: str) -> bool:
             found = cur.fetchone() is not None
         conn.commit()
     return found
+
+
+# --- Tourist-tax mutators (booking_tourist_tax, klt-web's TouristTax model) ---------------------
+#
+# Same standalone reasoning as the balance-payment trio above: no hold to extend, no conflict to
+# check, the booking is already confirmed by the time a tourist-tax payment happens. As of
+# 2026-08-30 these are wired but unreachable in production, same as the balance trio - see
+# main.py's revolut_booking_deposit_callback(), whose route-level guard returns before any
+# dispatch code (deposit, balance, or tourist tax) ever runs. Retiring the legacy
+# /revolut/callback route (still live, still processing real guests' tourist-tax payments via the
+# old system) is a separate, later decision - not done as part of adding these.
+
+def mark_tourist_tax_in_progress(order_id: str, event_type: str) -> bool:
+    """Returns False if no TouristTax row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_tourist_tax_paid(order_id: str) -> bool:
+    """Tourist tax paid in full. No conflict check and no enquiry_status change, same reasoning as
+    mark_balance_payment_paid. Returns False if no TouristTax row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_tourist_tax_failed(order_id: str, event_type: str) -> bool:
+    """Tourist tax payment explicitly declined/failed/cancelled - just record it, the guest can
+    retry. Returns False if no TouristTax row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+# --- Supplementary-payment mutators (booking_supplementary_payments, klt-web's
+# --- SupplementaryPayment model) -----------------------------------------------------------------
+#
+# 2026-09: on-demand top-up payments for a self-serve date change or guest addition on an already
+# fully-paid booking (see that model's own docstring in klt-web). Same standalone
+# in-progress/paid/failed trio shape as tourist tax above, and the same current unreachable status
+# (main.py's route-level guard). Deliberately thin, unlike mark_payment_paid's own conflict-check/
+# enquiry_status side effect: a SupplementaryPayment's actual effect (applying a staged date
+# change or guest addition to Booking/Charge/BookingGuest, including its own date-conflict re-
+# check) is real Django ORM logic (SupplementaryPayment.apply(), bookings/utils.py::
+# apply_supplementary_payment() in klt-web) that this module - no Django import possible here, see
+# the module docstring - can't run. These three functions only ever flip status/timestamps; klt-web
+# applies the staged change lazily the next time any Manage Booking hub page is loaded for that
+# booking (_manage_nav_context()'s sweep), the same "confirmed on next visit" norm the rest of
+# this dormant pipeline already has while it's off.
+
+def mark_supplementary_payment_in_progress(order_id: str, event_type: str) -> bool:
+    """Returns False if no SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_supplementary_payment_paid(order_id: str) -> bool:
+    """Marks the payment paid - does NOT apply the staged date-change/guest-add itself, see this
+    section's own header comment. Returns False if no SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_supplementary_payment_failed(order_id: str, event_type: str) -> bool:
+    """Payment explicitly declined/failed/cancelled - just record it, the guest can retry from the
+    same checkout page. Returns False if no SupplementaryPayment row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
