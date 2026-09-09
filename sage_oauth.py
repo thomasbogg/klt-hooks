@@ -26,4 +26,5 @@ def exchange_code_for_tokens(client_id: str, client_secret: str, code: str, redi
     })
     if response.status_code == 200:
         return response.json()
+    print(f'[sage oauth] token exchange rejected: {response.status_code} - {response.text}', flush=True)
     return None
