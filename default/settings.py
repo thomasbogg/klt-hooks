@@ -175,6 +175,21 @@ WISE_WEBHOOK_PUBLIC_KEY = os.getenv('WISE_WEBHOOK_PUBLIC_KEY', '')
 
 
 ##################################################
+# SAGE ONE OAUTH CREDENTIALS
+##################################################
+
+# klt-web's registered Sage One (Portugal) developer-app credentials (same client_id/client_secret
+# set in klt-web's own env_settings.py) - used only for the one-time OAuth2 authorization-code
+# exchange (main.py::sage_oauth_callback, sage_oauth.py), since klt-hooks is the only piece of this
+# system with a real, publicly-reachable HTTPS URL for Sage to redirect back to. The signing secret
+# used for actual Sage API calls (contacts/invoices) is NOT needed here - that only matters for the
+# ongoing signed requests klt-web itself makes (libraries/accounting/sage.py), never for this
+# token exchange.
+SAGE_CLIENT_ID = os.getenv('SAGE_CLIENT_ID')
+SAGE_CLIENT_SECRET = os.getenv('SAGE_CLIENT_SECRET')
+
+
+##################################################
 # TOURIST TAX SETTINGS
 ##################################################
 

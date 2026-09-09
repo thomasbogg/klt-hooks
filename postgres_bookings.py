@@ -485,3 +485,30 @@ def mark_supplementary_payment_failed(order_id: str, event_type: str) -> bool:
             found = cur.fetchone() is not None
         conn.commit()
     return found
+
+
+def mark_sage_connected(access_token: str, refresh_token: str, expires_at) -> None:
+    """Persists the result of the one-time Sage One OAuth2 grant (main.py::sage_oauth_callback) -
+    the only write this module makes outside the booking-payment tables above, and the only writer
+    of finance_sage_settings from outside klt-web itself.
+
+    UPSERT, not UPDATE: finance_sage_settings is a Django singleton (pk always 1, see
+    finance.models.SageSettings.load()'s own get_or_create(pk=1) pattern) that's created lazily -
+    there may be no row at all yet if nobody's called .load() against the real database before
+    now. default_tax_rate_id is deliberately left out of both the INSERT and the UPDATE - that
+    field is set by hand later, via klt-web's own Settings > Payments page, once Thomas has looked
+    up the real Sage-side id; this function only ever touches the OAuth token half."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO finance_sage_settings (id, access_token, refresh_token, token_expires_at)
+                VALUES (1, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    token_expires_at = EXCLUDED.token_expires_at
+                """,
+                (access_token, refresh_token, expires_at),
+            )
+        conn.commit()
