@@ -38,7 +38,7 @@ def mark_transfer_paid(transfer_id: str) -> bool:
             cur.execute(
                 """
                 UPDATE finance_payout_records
-                SET status = 'paid', last_event_type = 'TransferStateChanged'
+                SET status = 'paid', last_event_type = 'TransactionStateChanged'
                 WHERE revolut_transfer_id = %s
                 RETURNING id
                 """,
@@ -59,7 +59,7 @@ def mark_transfer_failed(transfer_id: str) -> bool:
             cur.execute(
                 """
                 UPDATE finance_payout_records
-                SET status = 'failed', last_event_type = 'TransferStateChanged', failed_at = now()
+                SET status = 'failed', last_event_type = 'TransactionStateChanged', failed_at = now()
                 WHERE revolut_transfer_id = %s
                 RETURNING id
                 """,
