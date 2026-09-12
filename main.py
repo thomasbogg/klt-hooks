@@ -134,14 +134,18 @@ def revolut_business_transfer_callback():
     product/subscription/signing key from both routes above, writing into klt-web's
     finance_payout_records via postgres_business_payouts.py rather than the booking_payments
     table. Deliberately not decorated with @pull_database, same reasoning as
-    revolut_booking_deposit_callback above. Payload field names (transfer id/state) are a
-    best-effort guess pending confirmation against Revolut's Business API docs during sandbox
-    testing - adjust data.get(...) below if the real payload shape differs."""
+    revolut_booking_deposit_callback above.
+
+    Payload shape confirmed 2026-09-12 against Revolut's own docs (the transfer this project sends
+    via POST /1.0/pay surfaces here as a "transaction", not under any "transfer" key the original
+    guess used): {"data": {"id", "new_state", "old_state", "request_id"}, "event":
+    "TransactionStateChanged", "timestamp"} - the transaction id and state are nested under `data`,
+    not top-level."""
     try:
         if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY):
-            data = json.loads(request.data)
-            transfer_id = data.get('transfer_id') or data.get('id')
-            state = data.get('state') or data.get('event')
+            payload = json.loads(request.data)
+            transfer_id = payload.get('data', {}).get('id')
+            state = payload.get('data', {}).get('new_state')
 
             if state == 'completed':
                 found = mark_transfer_paid(transfer_id)
