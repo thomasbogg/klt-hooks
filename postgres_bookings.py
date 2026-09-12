@@ -1,4 +1,5 @@
-"""Writes booking-deposit payment state directly into klt-web's shared Postgres database.
+"""Writes booking-deposit and booking-balance payment state directly into klt-web's shared
+Postgres database.
 
 Deliberately separate from default/database/ - that's the legacy SQLite framework (synced to/from
 Google Drive via wrapper.py's @pull_database), which is a different, disconnected database from
@@ -6,7 +7,7 @@ this one. Do NOT decorate anything here with that machinery.
 
 Schema is owned by klt-web's Django migrations (bookings/models.py) - this module has no
 migration-time safety net against a future column rename there. If a webhook starts failing after
-a klt-web schema change, check bookings/models.py::Booking/Payment first.
+a klt-web schema change, check bookings/models.py::Booking/Payment/BalancePayment first.
 """
 from datetime import timedelta
 
@@ -39,8 +40,13 @@ FAILURE_STATUS_BY_EVENT = {
 # deployables, see module docstring above). Keep in sync if either tuple changes there. Lists, not
 # tuples: psycopg3 (unlike psycopg2) doesn't expand a tuple parameter into an IN-list - these are
 # passed to = ANY(%s) instead, which needs a list/array.
-_BLOCKING_VALID_STATUSES = ['Booking confirmed', 'Guests have departed', 'Guests on-site', 'Holiday completed']
-_BLOCKING_PROVISIONAL_STATUSES = ['Provisional booking', 'Dates agreed and held', 'Awaiting payment']
+#
+# Trimmed 2026-08-25 to match klt-web: 'Guests have departed'/'Guests on-site'/'Holiday completed'
+# and 'Provisional booking'/'Dates agreed and held' were PIMS-inherited status labels nothing ever
+# actually set on either side - klt-web's booking_stage() always derived "started"/"ended" purely
+# from arrival_date/departure_date, never from which one of these a booking had.
+_BLOCKING_VALID_STATUSES = ['Booking confirmed']
+_BLOCKING_PROVISIONAL_STATUSES = ['Awaiting payment']
 
 
 def _add_business_days(start, business_days):
@@ -226,3 +232,283 @@ def mark_payment_failed(order_id: str, event_type: str) -> bool:
             )
         conn.commit()
     return True
+
+
+# --- Balance-payment mutators (booking_balance_payments, klt-web's BalancePayment model) -------
+#
+# Deliberately NOT a "try booking_payments, then fall back to booking_balance_payments" branch
+# bolted onto the four functions above: the deposit stage's hold-extension/date-conflict logic
+# exists because the deposit is what holds the calendar slot open. By the time a balance payment
+# exists at all, the booking is already confirmed and the slot is already locked in - there's no
+# hold to extend and no conflict to check, so these are deliberately simpler, standalone functions
+# rather than reused/branched versions of the deposit ones. As of 2026-08-20 these are wired but
+# unreachable in production - see main.py's revolut_booking_deposit_callback(), whose route-level
+# guard returns before any dispatch code (deposit or balance) ever runs.
+
+def mark_balance_payment_in_progress(order_id: str, event_type: str) -> bool:
+    """Covers IN_PROGRESS_EVENTS and ORDER_PAYMENT_AUTHENTICATED alike - unlike the deposit
+    version, there's no hold to extend either way, so both collapse to the same simple status
+    update. Returns False if no BalancePayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_balance_payment_paid(order_id: str) -> bool:
+    """Balance paid in full. No conflict check and no enquiry_status change - the booking is
+    already 'Booking confirmed' from the deposit stage, and there's no separate status literal for
+    "balance also paid" in klt-web's env_settings.VALID_BOOKING_STATUSES to set it to. Returns
+    False if no BalancePayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_balance_payment_failed(order_id: str, event_type: str) -> bool:
+    """Balance payment explicitly declined/failed/cancelled - just record it, since there's no
+    hold to release and the booking's own enquiry_status stays 'Booking confirmed' either way (the
+    guest can simply retry). Returns False if no BalancePayment row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_balance_payments
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+# --- Tourist-tax mutators (booking_tourist_tax, klt-web's TouristTax model) ---------------------
+#
+# Same standalone reasoning as the balance-payment trio above: no hold to extend, no conflict to
+# check, the booking is already confirmed by the time a tourist-tax payment happens. As of
+# 2026-08-30 these are wired but unreachable in production, same as the balance trio - see
+# main.py's revolut_booking_deposit_callback(), whose route-level guard returns before any
+# dispatch code (deposit, balance, or tourist tax) ever runs. Retiring the legacy
+# /revolut/callback route (still live, still processing real guests' tourist-tax payments via the
+# old system) is a separate, later decision - not done as part of adding these.
+
+def mark_tourist_tax_in_progress(order_id: str, event_type: str) -> bool:
+    """Returns False if no TouristTax row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_tourist_tax_paid(order_id: str) -> bool:
+    """Tourist tax paid in full. No conflict check and no enquiry_status change, same reasoning as
+    mark_balance_payment_paid. Returns False if no TouristTax row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_tourist_tax_failed(order_id: str, event_type: str) -> bool:
+    """Tourist tax payment explicitly declined/failed/cancelled - just record it, the guest can
+    retry. Returns False if no TouristTax row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_tourist_tax
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+# --- Supplementary-payment mutators (booking_supplementary_payments, klt-web's
+# --- SupplementaryPayment model) -----------------------------------------------------------------
+#
+# 2026-09: on-demand top-up payments for a self-serve date change or guest addition on an already
+# fully-paid booking (see that model's own docstring in klt-web). Same standalone
+# in-progress/paid/failed trio shape as tourist tax above, and the same current unreachable status
+# (main.py's route-level guard). Deliberately thin, unlike mark_payment_paid's own conflict-check/
+# enquiry_status side effect: a SupplementaryPayment's actual effect (applying a staged date
+# change or guest addition to Booking/Charge/BookingGuest, including its own date-conflict re-
+# check) is real Django ORM logic (SupplementaryPayment.apply(), bookings/utils.py::
+# apply_supplementary_payment() in klt-web) that this module - no Django import possible here, see
+# the module docstring - can't run. These three functions only ever flip status/timestamps; klt-web
+# applies the staged change lazily the next time any Manage Booking hub page is loaded for that
+# booking (_manage_nav_context()'s sweep), the same "confirmed on next visit" norm the rest of
+# this dormant pipeline already has while it's off.
+
+def mark_supplementary_payment_in_progress(order_id: str, event_type: str) -> bool:
+    """Payment attempt detected but not yet resolved - extends hold_expires_at the same way
+    mark_payment_in_progress() does for a brand-new reservation's own hold, so a kind='date_change'
+    row's requested dates don't lose their hold mid-payment (harmless no-op update for
+    kind='guest_add', which never sets hold_expires_at in the first place). Returns False if no
+    SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'in_progress', last_event_type = %s, in_progress_at = now(),
+                    hold_expires_at = now() + (
+                        SELECT (revolut_hold_extension_minutes || ' minutes')::interval
+                        FROM booking_settings WHERE id = 1
+                    )
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_supplementary_payment_authenticated(order_id: str) -> bool:
+    """ORDER_PAYMENT_AUTHENTICATED - swaps the hold to the full payment-clearing window, mirroring
+    mark_payment_authenticated() exactly (see its own docstring for why). Returns False if no
+    SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'in_progress', last_event_type = 'ORDER_PAYMENT_AUTHENTICATED', in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id, in_progress_at
+                """,
+                (order_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return False
+            booking_id, in_progress_at = row
+
+            cur.execute("SELECT payment_clearing_business_days FROM booking_settings WHERE id = 1")
+            (business_days,) = cur.fetchone()
+            new_hold_expiry = _add_business_days(in_progress_at, business_days)
+
+            cur.execute(
+                "UPDATE booking_supplementary_payments SET hold_expires_at = %s WHERE revolut_order_id = %s",
+                (new_hold_expiry, order_id),
+            )
+        conn.commit()
+    return True
+
+
+def mark_supplementary_payment_paid(order_id: str) -> bool:
+    """Marks the payment paid - does NOT apply the staged date-change/guest-add itself, see this
+    section's own header comment. Returns False if no SupplementaryPayment row matches order_id."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED', paid_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_supplementary_payment_failed(order_id: str, event_type: str) -> bool:
+    """Payment explicitly declined/failed/cancelled - just record it, the guest can retry from the
+    same checkout page. Returns False if no SupplementaryPayment row matches order_id."""
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE booking_supplementary_payments
+                SET status = %s, last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING booking_id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_sage_connected(access_token: str, refresh_token: str, expires_at) -> None:
+    """Persists the result of the one-time Sage One OAuth2 grant (main.py::sage_oauth_callback) -
+    the only write this module makes outside the booking-payment tables above, and the only writer
+    of finance_sage_settings from outside klt-web itself.
+
+    UPSERT, not UPDATE: finance_sage_settings is a Django singleton (pk always 1, see
+    finance.models.SageSettings.load()'s own get_or_create(pk=1) pattern) that's created lazily -
+    there may be no row at all yet if nobody's called .load() against the real database before
+    now. default_tax_rate_id is deliberately left out of both the INSERT and the UPDATE - that
+    field is set by hand later, via klt-web's own Settings > Payments page, once Thomas has looked
+    up the real Sage-side id; this function only ever touches the OAuth token half."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO finance_sage_settings (id, access_token, refresh_token, token_expires_at)
+                VALUES (1, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    token_expires_at = EXCLUDED.token_expires_at
+                """,
+                (access_token, refresh_token, expires_at),
+            )
+        conn.commit()
