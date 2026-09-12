@@ -162,6 +162,33 @@ def revolut_business_transfer_callback():
     return ('', 204)
 
 
+@app.route("/revolut/business-oauth-callback", methods=["GET"])
+def revolut_business_oauth_callback():
+    """Where Revolut's Business API OAuth2 consent redirect lands after Thomas approves
+    application access in the Revolut Business app - a one-time bootstrap step (getting the first
+    refresh_token), not a recurring webhook. klt-hooks is the only publicly-reachable HTTPS URL in
+    this system, same reasoning as sage_oauth_callback below.
+
+    Deliberately does NOT do the code->token exchange itself, unlike sage_oauth_callback - that
+    exchange needs the same RS256 client-assertion JWT signing klt-web already has for its ongoing
+    refresh-token flow (libraries/banking/revolut_business.py::generate_client_assertion), and
+    duplicating a private-key-holding crypto implementation across two separately-deployed services
+    isn't worth it for a step that only ever runs once per environment. Instead this just shows the
+    code on screen - Thomas is watching this happen - for him to paste into klt-web's
+    exchange_revolut_business_auth_code management command within its short validity window."""
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error or not code:
+        return f"<html><body><p>Revolut Business connection failed: {escape(error or 'no code returned')}.</p></body></html>"
+
+    return (
+        f"<html><body><p>Authorization code received:</p><pre>{escape(code)}</pre>"
+        "<p>Paste this into klt-web's <code>exchange_revolut_business_auth_code</code> management "
+        "command now - it expires quickly.</p></body></html>"
+    )
+
+
 @app.route("/wise/balance-update-callback", methods=["POST"])
 def wise_balance_update_callback():
     """Receives Wise's account-deposit webhook. Wise automation is paused as of 2026-08-18 -
