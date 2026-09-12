@@ -167,6 +167,13 @@ REVOLUT_BUSINESS_API_CLIENT_ASSERTION = os.getenv('REVOLUT_BUSINESS_API_CLIENT_A
 REVOLUT_BUSINESS_API_VERSION = os.getenv('REVOLUT_BUSINESS_API_VERSION')
 REVOLUT_BUSINESS_API_SIGNING_KEY = os.getenv('REVOLUT_BUSINESS_API_SIGNING_KEY')
 
+# Own signing secret for the Business API's owner-payout transfer-state webhook (separate
+# subscription from REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY above), registered via klt-web's
+# finance/management/commands/register_revolut_business_transfer_webhook.py. NOT the same key as
+# REVOLUT_BUSINESS_API_SIGNING_KEY above, which signs the OAuth JWT client assertion, not webhook
+# payloads.
+REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY = os.getenv('REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY')
+
 # Wise webhook automation is paused (2026-08-18) - Personal API tokens can't retrieve balance
 # statements for Portugal-based accounts, which blocked automated reference matching. Left unset
 # deliberately: this is Wise's real *production* public key, which was never confirmed (only a

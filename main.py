@@ -2,9 +2,10 @@ from flask import Flask, request
 import json
 import os
 from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
-from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY
+from default.settings import REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY, REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY
 from correspondence.self.functions import contact_self
 from postgres_bookings import IN_PROGRESS_EVENTS, FAILURE_STATUS_BY_EVENT, mark_payment_in_progress, mark_payment_authenticated, mark_payment_paid, mark_payment_failed
+from postgres_business_payouts import mark_transfer_paid, mark_transfer_failed
 from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
 
@@ -61,6 +62,40 @@ def revolut_booking_deposit_callback():
 
             if not found:
                 _contact_self_for_error(f"No booking payment found for order_id: {order_id}", request.data.decode('utf-8'), dict(request.headers))
+
+    except Exception as e:
+        _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
+
+    return ('', 204)
+
+
+@app.route("/revolut/business-transfer-callback", methods=["POST"])
+def revolut_business_transfer_callback():
+    """Revolut Business API transfer-state webhook (owner payouts) - a separate
+    product/subscription/signing key from both routes above, writing into klt-web's
+    finance_payout_records via postgres_business_payouts.py rather than the booking_payments
+    table. Deliberately not decorated with @pull_database, same reasoning as
+    revolut_booking_deposit_callback above. Payload field names (transfer id/state) are a
+    best-effort guess pending confirmation against Revolut's Business API docs during sandbox
+    testing - adjust data.get(...) below if the real payload shape differs."""
+    try:
+        if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY):
+            data = json.loads(request.data)
+            transfer_id = data.get('transfer_id') or data.get('id')
+            state = data.get('state') or data.get('event')
+
+            if state == 'completed':
+                found = mark_transfer_paid(transfer_id)
+            elif state in ('failed', 'declined', 'cancelled'):
+                found = mark_transfer_failed(transfer_id)
+            else:
+                found = True  # pending/created etc - nothing terminal to record yet
+
+            if not found:
+                _contact_self_for_error(
+                    f"No payout record found for transfer_id: {transfer_id}",
+                    request.data.decode('utf-8'), dict(request.headers),
+                )
 
     except Exception as e:
         _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
