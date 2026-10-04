@@ -71,6 +71,28 @@ def _connect():
     )
 
 
+# Every klt-web table that stores a Revolut order id. An order found in any of them was created
+# by klt-web, not by the legacy tourist-tax system that shares the Revolut account.
+_KLT_WEB_ORDER_TABLES = (
+    'booking_payments', 'booking_balance_payments', 'booking_tourist_tax',
+    'booking_supplementary_payments', 'finance_owner_invoices',
+)
+
+
+def is_klt_web_order(order_id: str) -> bool:
+    """Whether klt-web created this Revolut order. Used by main.py's legacy tourist-tax route to
+    leave klt-web's orders alone - Revolut sends every order's events to both routes."""
+    if not order_id:
+        return False
+    query = ' UNION ALL '.join(
+        f"SELECT 1 FROM {table} WHERE revolut_order_id = %s" for table in _KLT_WEB_ORDER_TABLES
+    ) + ' LIMIT 1'
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, [order_id] * len(_KLT_WEB_ORDER_TABLES))
+            return cur.fetchone() is not None
+
+
 def mark_payment_in_progress(order_id: str, event_type: str) -> bool:
     """Payment attempt detected but not yet resolved - extend the calendar hold rather than let it
     lapse mid-payment. Returns False if no Payment row matches order_id (nothing to update)."""

@@ -17,6 +17,7 @@ from postgres_bookings import (
     mark_balance_payment_failed, mark_tourist_tax_in_progress, mark_tourist_tax_paid, mark_tourist_tax_failed,
     mark_supplementary_payment_in_progress, mark_supplementary_payment_authenticated,
     mark_supplementary_payment_paid, mark_supplementary_payment_failed, mark_sage_connected,
+    is_klt_web_order,
 )
 from postgres_business_payouts import mark_transfer_paid, mark_transfer_failed
 from sage_oauth import exchange_code_for_tokens
@@ -25,6 +26,31 @@ from wise import verify_wise_payload_signature, log_invalid_wise_callback
 
 app = Flask(__name__)
 
+# The start of the reference on every Revolut order klt-web creates (KLT_WEB_ORDER_TAG in
+# klt-web's libraries/banking/revolut.py - change both together). The legacy tourist-tax system
+# and klt-web take payments on the same Revolut account, and Revolut sends every order's events
+# to every webhook registered on it, so each of the two routes below sees the other's orders.
+# This tag, which Revolut passes back as merchant_order_ext_ref, is how they tell them apart.
+KLT_WEB_ORDER_TAG = 'klt-web:'
+
+
+def _is_tagged_klt_web_order(data: dict) -> bool:
+    reference = data.get('merchant_order_ext_ref')
+    return isinstance(reference, str) and reference.startswith(KLT_WEB_ORDER_TAG)
+
+
+def _belongs_to_klt_web(data: dict) -> bool:
+    """For the legacy route: is this event about one of klt-web's orders? The tag is the quick
+    answer; the database lookup covers an order created before tagging began, or a webhook that
+    arrives without the reference. If the lookup itself fails the answer is no - a legacy
+    tourist-tax payment must never go unrecorded because klt-web's database was unreachable."""
+    if _is_tagged_klt_web_order(data):
+        return True
+    try:
+        return is_klt_web_order(data.get('order_id'))
+    except Exception:
+        return False
+
 
 @app.route("/revolut/callback", methods=["POST"])
 def revolut_merchant_callback():
@@ -32,6 +58,10 @@ def revolut_merchant_callback():
         if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_MERCHANT_API_SIGNING_KEY):
 
             data = json.loads(request.data)
+            if _belongs_to_klt_web(data):
+                # klt-web's order, not a legacy tourist-tax one: the booking route below handles
+                # it. Recording it here would add a "paid" tourist-tax row that matches nothing.
+                return ('', 204)
             if not data['event'] == 'ORDER_COMPLETED':
                 _contact_self_for_error(f"Received unexpected event type: {data['event']}", request.data.decode('utf-8'), dict(request.headers))
             else:
@@ -51,25 +81,24 @@ def revolut_booking_deposit_callback():
     uses. See bookings/models.py::Payment/BalancePayment/TouristTax/SupplementaryPayment in
     klt-web.
 
-    SUSPENDED as of 2026-08-20 (the bare 204 below) - Revolut delivers every event to every
-    registered webhook on the account regardless of which one "owns" it, so this route was seeing
-    the legacy tourist-tax route's own callbacks too and alerting on them as unrecognised. Stays
-    off until the tourist-tax route is retired (it's on the old system klt-web is replacing, not
-    this one) - re-enabling before then just reintroduces the same false-alert noise. klt-web
-    itself isn't publicly deployed yet either (see reference_klt_web_dev_env in memory), so real
-    guests are still on the old system for tourist-tax collection regardless - retiring the legacy
-    route is a later, separate decision tied to deployment, not part of adding klt-web's own
-    tourist-tax feature (2026-08-30) or its later supplementary-payment one (2026-09). The dispatch
-    below (deposit first, balance next, tourist tax next, supplementary payment last as a further
-    fallback) is otherwise ready to go once that's resolved. Note supplementary_payment's 'paid'
-    branch only flips status - applying the staged date-change/guest-add is real Django ORM logic
-    this module can't run, see postgres_bookings.py's own section header comment for that trio."""
-    return ('', 204)
+    Runs alongside the legacy tourist-tax route above (2026-10-04): the legacy system stays live
+    after klt-web's cutover because guests already holding one of its payment links go on paying
+    through them. Revolut delivers every event to every registered webhook on the account, so this
+    route also sees the legacy route's orders. It was suspended from 2026-08-20 for exactly that
+    reason - it alerted on each one as unrecognised. Now an order it cannot find is only alerted
+    on when it carries klt-web's tag (KLT_WEB_ORDER_TAG): an untagged, unknown order is the legacy
+    system's and is ignored.
+
+    The dispatch tries deposit first, then balance, tourist tax, and supplementary payment last.
+    Note supplementary_payment's 'paid' branch only flips status - applying the staged
+    date-change/guest-add is real Django ORM logic this module can't run, see postgres_bookings.py's
+    own section header comment for that trio."""
     try:
         if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY):
             data = json.loads(request.data)
             event = data['event']
             order_id = data['order_id']
+            tagged = _is_tagged_klt_web_order(data)
 
             if event in IN_PROGRESS_EVENTS or event == 'ORDER_PAYMENT_AUTHENTICATED':
                 if event in IN_PROGRESS_EVENTS:
@@ -119,7 +148,11 @@ def revolut_booking_deposit_callback():
                 _contact_self_for_error(f"Received unexpected event type: {event}", request.data.decode('utf-8'), dict(request.headers))
                 found = True
 
-            if not found:
+            # One line per event in the service log: which order, whether Revolut passed the tag
+            # back, and whether a klt-web payment matched.
+            print(f"booking route: {event} order={order_id} tagged={tagged} matched={found}", flush=True)
+
+            if not found and tagged:
                 _contact_self_for_error(f"No booking payment found for order_id: {order_id}", request.data.decode('utf-8'), dict(request.headers))
 
     except Exception as e:
