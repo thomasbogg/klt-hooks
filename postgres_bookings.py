@@ -95,7 +95,12 @@ def is_klt_web_order(order_id: str) -> bool:
 
 def mark_payment_in_progress(order_id: str, event_type: str) -> bool:
     """Payment attempt detected but not yet resolved - extend the calendar hold rather than let it
-    lapse mid-payment. Returns False if no Payment row matches order_id (nothing to update)."""
+    lapse mid-payment. Returns False if no Payment row matches order_id (nothing to update).
+
+    Extend, never shorten (GREATEST): an offer made by staff in klt-web is held for days
+    (BookingSettings.staff_offer_hold_days), and its guest has been told the day and time by
+    email. Setting the hold to "now + the extension" cut that to twenty minutes the moment they
+    began to pay."""
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -115,10 +120,10 @@ def mark_payment_in_progress(order_id: str, event_type: str) -> bool:
             cur.execute(
                 """
                 UPDATE bookings
-                SET hold_expires_at = now() + (
+                SET hold_expires_at = GREATEST(hold_expires_at, now() + (
                     SELECT (revolut_hold_extension_minutes || ' minutes')::interval
                     FROM booking_settings WHERE id = 1
-                )
+                ))
                 WHERE id = %s
                 """,
                 (booking_id,),
@@ -155,8 +160,9 @@ def mark_payment_authenticated(order_id: str) -> bool:
             (business_days,) = cur.fetchone()
             new_hold_expiry = _add_business_days(in_progress_at, business_days)
 
+            # GREATEST for the same reason as in mark_payment_in_progress: never cut a longer hold short.
             cur.execute(
-                "UPDATE bookings SET hold_expires_at = %s WHERE id = %s",
+                "UPDATE bookings SET hold_expires_at = GREATEST(hold_expires_at, %s) WHERE id = %s",
                 (new_hold_expiry, booking_id),
             )
         conn.commit()
@@ -224,36 +230,44 @@ def mark_payment_paid(order_id: str) -> str:
 
 
 def mark_payment_failed(order_id: str, event_type: str) -> bool:
-    """Payment explicitly declined/failed/cancelled - release the hold now rather than waiting out
-    the timer, and record a status distinct from 'Awaiting payment' for admin visibility. Returns
-    False if no Payment row matches order_id."""
-    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    """A deposit payment attempt was declined or failed, or its order was cancelled. Recorded on
+    the Payment row and nothing else (2026-10-04, per Thomas): the booking keeps its status and
+    its hold, so the guest can simply try again. People's first attempt fails often enough -
+    a mistyped number, a bank's fraud check - that closing the booking and releasing the dates on
+    one decline, as this used to, turned an ordinary retry into a lost reservation. Time is the
+    only thing that releases the dates: hold_expires_at running out, which klt-web's
+    expire_stale_holds() turns into 'Hold expired'.
+
+    The Payment goes back to 'pending' - still awaited, exactly as before the attempt, which is a
+    state every klt-web page already handles. last_event_type and failed_at keep the record of
+    the attempt for staff. A row already 'paid' is left alone: a late event for an earlier
+    attempt must not undo the payment that followed it.
+
+    ORDER_CANCELLED means the order itself can no longer be paid, so its id and checkout link are
+    cleared; klt-web's pay page creates a fresh order the next time the guest opens it.
+
+    Returns False if no Payment row matches order_id."""
+    order_is_dead = event_type == 'ORDER_CANCELLED'
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE booking_payments
-                SET status = %s, last_event_type = %s, failed_at = now()
-                WHERE revolut_order_id = %s
+                SET status = 'pending', last_event_type = %s, failed_at = now(),
+                    revolut_order_id = CASE WHEN %s THEN NULL ELSE revolut_order_id END,
+                    revolut_checkout_url = CASE WHEN %s THEN NULL ELSE revolut_checkout_url END
+                WHERE revolut_order_id = %s AND status <> 'paid'
                 RETURNING booking_id
                 """,
-                (status, event_type, order_id),
+                (event_type, order_is_dead, order_is_dead, order_id),
             )
-            row = cur.fetchone()
-            if row is None:
-                return False
-            booking_id = row[0]
-
-            cur.execute(
-                """
-                UPDATE bookings
-                SET enquiry_status = 'Payment failed', last_updated = now()
-                WHERE id = %s
-                """,
-                (booking_id,),
-            )
+            found = cur.fetchone() is not None
+            if not found:
+                # Already paid: the order is ours, there is just nothing to record.
+                cur.execute("SELECT 1 FROM booking_payments WHERE revolut_order_id = %s", (order_id,))
+                found = cur.fetchone() is not None
         conn.commit()
-    return True
+    return found
 
 
 # --- Balance-payment mutators (booking_balance_payments, klt-web's BalancePayment model) -------
@@ -490,21 +504,29 @@ def mark_supplementary_payment_paid(order_id: str) -> bool:
 
 
 def mark_supplementary_payment_failed(order_id: str, event_type: str) -> bool:
-    """Payment explicitly declined/failed/cancelled - just record it, the guest can retry from the
-    same checkout page. Returns False if no SupplementaryPayment row matches order_id."""
-    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    """A payment attempt for a date change or an added guest was declined or failed - the guest
+    can retry from the same checkout page, so the row goes back to 'pending' (2026-10-04, same
+    rule as mark_payment_failed): klt-web only counts a 'pending' or 'in_progress' date change as
+    holding its new dates (SupplementaryPaymentQuerySet.holding_dates), so recording 'declined'
+    here released them on the first failed card. last_event_type and failed_at keep the record.
+    A cancelled order cannot be retried and is still recorded as 'cancelled'. A row already
+    'paid' is left alone. Returns False if no SupplementaryPayment row matches order_id."""
+    status = 'cancelled' if event_type == 'ORDER_CANCELLED' else 'pending'
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE booking_supplementary_payments
                 SET status = %s, last_event_type = %s, failed_at = now()
-                WHERE revolut_order_id = %s
+                WHERE revolut_order_id = %s AND status <> 'paid'
                 RETURNING booking_id
                 """,
                 (status, event_type, order_id),
             )
             found = cur.fetchone() is not None
+            if not found:
+                cur.execute("SELECT 1 FROM booking_supplementary_payments WHERE revolut_order_id = %s", (order_id,))
+                found = cur.fetchone() is not None
         conn.commit()
     return found
 
