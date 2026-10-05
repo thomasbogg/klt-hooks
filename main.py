@@ -4,9 +4,9 @@ from flask import Flask, request
 from markupsafe import escape
 import json
 import os
-from revolut import process_revolut_merchant_callback, verify_revolut_payload_signature
+from revolut import verify_revolut_payload_signature
 from default.settings import (
-    REVOLUT_MERCHANT_API_SIGNING_KEY, REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY,
+    REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY,
     REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY,
     SAGE_CLIENT_ID, SAGE_CLIENT_SECRET, KLT_WEBHOOK_URL,
 )
@@ -17,7 +17,6 @@ from postgres_bookings import (
     mark_balance_payment_failed, mark_tourist_tax_in_progress, mark_tourist_tax_paid, mark_tourist_tax_failed,
     mark_supplementary_payment_in_progress, mark_supplementary_payment_authenticated,
     mark_supplementary_payment_paid, mark_supplementary_payment_failed, mark_sage_connected,
-    is_klt_web_order,
 )
 from postgres_business_payouts import mark_transfer_paid, mark_transfer_failed
 from sage_oauth import exchange_code_for_tokens
@@ -27,10 +26,10 @@ from wise import verify_wise_payload_signature, log_invalid_wise_callback
 app = Flask(__name__)
 
 # The start of the reference on every Revolut order klt-web creates (KLT_WEB_ORDER_TAG in
-# klt-web's libraries/banking/revolut.py - change both together). The legacy tourist-tax system
-# and klt-web take payments on the same Revolut account, and Revolut sends every order's events
-# to every webhook registered on it, so each of the two routes below sees the other's orders.
-# This tag, which Revolut passes back as merchant_order_ext_ref, is how they tell them apart.
+# klt-web's libraries/banking/revolut.py - change both together). Revolut passes it back as
+# merchant_order_ext_ref. The legacy tourist-tax system took payments on the same Revolut account
+# and its orders carry no tag; the tag is how the route below tells an order of klt-web's that it
+# cannot find (worth an alert) from one of the legacy system's (not).
 KLT_WEB_ORDER_TAG = 'klt-web:'
 
 
@@ -39,38 +38,13 @@ def _is_tagged_klt_web_order(data: dict) -> bool:
     return isinstance(reference, str) and reference.startswith(KLT_WEB_ORDER_TAG)
 
 
-def _belongs_to_klt_web(data: dict) -> bool:
-    """For the legacy route: is this event about one of klt-web's orders? The tag is the quick
-    answer; the database lookup covers an order created before tagging began, or a webhook that
-    arrives without the reference. If the lookup itself fails the answer is no - a legacy
-    tourist-tax payment must never go unrecorded because klt-web's database was unreachable."""
-    if _is_tagged_klt_web_order(data):
-        return True
-    try:
-        return is_klt_web_order(data.get('order_id'))
-    except Exception:
-        return False
-
-
-@app.route("/revolut/callback", methods=["POST"])
-def revolut_merchant_callback():
-    try:
-        if verify_revolut_payload_signature(request.headers, request.data, REVOLUT_MERCHANT_API_SIGNING_KEY):
-
-            data = json.loads(request.data)
-            if _belongs_to_klt_web(data):
-                # klt-web's order, not a legacy tourist-tax one: the booking route below handles
-                # it. Recording it here would add a "paid" tourist-tax row that matches nothing.
-                return ('', 204)
-            if not data['event'] == 'ORDER_COMPLETED':
-                _contact_self_for_error(f"Received unexpected event type: {data['event']}", request.data.decode('utf-8'), dict(request.headers))
-            else:
-                process_revolut_merchant_callback(data)
-
-    except Exception as e:
-        _contact_self_for_error(str(e), request.data.decode('utf-8'), dict(request.headers))
-
-    return ('', 204) # Return 204 to indicate that the callback was received, even if there was an error processing it
+# The legacy tourist-tax route, /revolut/callback, was retired on 2026-10-05, and its webhook
+# removed from the Revolut account the same day. It recorded payments made through the legacy
+# suite's own payment links in this service's SQLite database. By then the legacy suite had
+# stopped making those links (they went out with its PIMS registration email), the three still
+# unpaid for current guests had been cancelled, and every older unpaid one is held by klt-web as
+# well - the legacy sync copies its order id onto the booking's tourist-tax row - so the route
+# below records a payment through one of those against the booking directly.
 
 
 @app.route("/revolut/booking-deposit-callback", methods=["POST"])
@@ -81,13 +55,11 @@ def revolut_booking_deposit_callback():
     uses. See bookings/models.py::Payment/BalancePayment/TouristTax/SupplementaryPayment in
     klt-web.
 
-    Runs alongside the legacy tourist-tax route above (2026-10-04): the legacy system stays live
-    after klt-web's cutover because guests already holding one of its payment links go on paying
-    through them. Revolut delivers every event to every registered webhook on the account, so this
-    route also sees the legacy route's orders. It was suspended from 2026-08-20 for exactly that
-    reason - it alerted on each one as unrecognised. Now an order it cannot find is only alerted
-    on when it carries klt-web's tag (KLT_WEB_ORDER_TAG): an untagged, unknown order is the legacy
-    system's and is ignored.
+    The only Revolut Merchant webhook now (the legacy tourist-tax route was retired 2026-10-05,
+    see above). Revolut delivers every order's events here, the legacy system's old payment
+    links included. One of those that klt-web holds on a tourist-tax row is matched like any
+    other order; an order it cannot find is only alerted on when it carries klt-web's tag
+    (KLT_WEB_ORDER_TAG) - an untagged, unknown order is the legacy system's and is ignored.
 
     The dispatch tries deposit first, then balance, tourist tax, and supplementary payment last.
     Note supplementary_payment's 'paid' branch only flips status - applying the staged

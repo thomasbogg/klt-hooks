@@ -3,39 +3,6 @@ import hmac
 from werkzeug.datastructures import Headers
 
 from correspondence.self.functions import contact_self
-from default.database.rows.touristtax import Touristtax
-from default.database.database import Database
-from default.database.functions import open_database, get_touristtax_payment
-from default.dates import dates
-from wrapper import pull_database
-
-
-@pull_database
-def process_revolut_merchant_callback(data: dict) -> None:
-    """
-    Process the Revolut callback data for an order completion event.
-    
-    Args:
-        data: The data received from the Revolut callback, expected to contain order information.
-    
-    Returns:
-        None
-    """
-    orderId = data['order_id']
-
-    database = open_database()
-    touristtax = _get_touristtax_payment(database, orderId)
-
-    if touristtax and touristtax.paid:
-        database.close()
-        return
-
-    touristtax = Touristtax(database)
-    touristtax.orderId = orderId
-    touristtax.date = dates.date()        
-    touristtax.paid = True
-    touristtax.insert()
-    database.close()
 
 
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes, signing_secret: str) -> bool:
@@ -60,18 +27,3 @@ def log_invalid_revolut_callback(timestamp, payload_to_sign, signature, received
             f"Signing key used: {signing_secret}"
         ),
     )
-
-
-def _get_touristtax_payment(database: Database, orderId: str) -> Touristtax | None:
-    """
-    Retrieve the booking associated with the given order ID for tourist tax calculation.
-    
-    Args:
-        database: The database instance to query.
-        orderId: The order ID from the Revolut callback to search for.
-        
-    Returns:
-        The Touristtax object associated with the order ID, or None if not found.
-    """
-    search = get_touristtax_payment(database, orderId=orderId)
-    return search.fetchone()
