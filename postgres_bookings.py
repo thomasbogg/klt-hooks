@@ -388,6 +388,68 @@ def mark_tourist_tax_failed(order_id: str, event_type: str) -> bool:
     return found
 
 
+# --- Owner-invoice mutators (finance_owner_invoices, klt-web's OwnerInvoice model) ---------------
+#
+# 2026-10-09: a CLEANS_MONTHLY invoice (cleans, meet & greet and any ad-hoc costs billed with them)
+# carries a Revolut order tagged klt-web:owner-invoice-<id>. These flip its status on the order's
+# events, as the last fallback after every guest payment table. A paid invoice is never moved back
+# by a late in-progress or failure event. Returns False if no OwnerInvoice matches order_id.
+
+def mark_owner_invoice_in_progress(order_id: str, event_type: str) -> bool:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_owner_invoices
+                SET status = CASE WHEN status = 'paid' THEN status ELSE 'in_progress' END,
+                    last_event_type = %s, in_progress_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING id
+                """,
+                (event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_owner_invoice_paid(order_id: str) -> bool:
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_owner_invoices
+                SET status = 'paid', last_event_type = 'ORDER_COMPLETED',
+                    paid_at = COALESCE(paid_at, now())
+                WHERE revolut_order_id = %s
+                RETURNING id
+                """,
+                (order_id,),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
+def mark_owner_invoice_failed(order_id: str, event_type: str) -> bool:
+    status = FAILURE_STATUS_BY_EVENT.get(event_type, 'failed')
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_owner_invoices
+                SET status = CASE WHEN status = 'paid' THEN status ELSE %s END,
+                    last_event_type = %s, failed_at = now()
+                WHERE revolut_order_id = %s
+                RETURNING id
+                """,
+                (status, event_type, order_id),
+            )
+            found = cur.fetchone() is not None
+        conn.commit()
+    return found
+
+
 # --- Supplementary-payment mutators (booking_supplementary_payments, klt-web's
 # --- SupplementaryPayment model) -----------------------------------------------------------------
 #

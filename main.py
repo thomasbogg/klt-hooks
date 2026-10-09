@@ -17,6 +17,7 @@ from postgres_bookings import (
     mark_balance_payment_failed, mark_tourist_tax_in_progress, mark_tourist_tax_paid, mark_tourist_tax_failed,
     mark_supplementary_payment_in_progress, mark_supplementary_payment_authenticated,
     mark_supplementary_payment_paid, mark_supplementary_payment_failed, mark_sage_connected,
+    mark_owner_invoice_in_progress, mark_owner_invoice_paid, mark_owner_invoice_failed,
 )
 from postgres_business_payouts import mark_transfer_paid, mark_transfer_failed
 from sage_oauth import exchange_code_for_tokens
@@ -92,6 +93,8 @@ def revolut_booking_deposit_callback():
                         found = mark_supplementary_payment_in_progress(order_id, event)
                     else:
                         found = mark_supplementary_payment_authenticated(order_id)
+                if not found:
+                    found = mark_owner_invoice_in_progress(order_id, event)
             elif event == 'ORDER_COMPLETED':
                 result = mark_payment_paid(order_id)
                 found = result != 'not_found'
@@ -108,6 +111,8 @@ def revolut_booking_deposit_callback():
                         found = mark_tourist_tax_paid(order_id)
                     if not found:
                         found = mark_supplementary_payment_paid(order_id)
+                    if not found:
+                        found = mark_owner_invoice_paid(order_id)
             elif event in FAILURE_STATUS_BY_EVENT:
                 found = mark_payment_failed(order_id, event)
                 if not found:
@@ -116,6 +121,8 @@ def revolut_booking_deposit_callback():
                     found = mark_tourist_tax_failed(order_id, event)
                 if not found:
                     found = mark_supplementary_payment_failed(order_id, event)
+                if not found:
+                    found = mark_owner_invoice_failed(order_id, event)
             else:
                 _contact_self_for_error(f"Received unexpected event type: {event}", request.data.decode('utf-8'), dict(request.headers))
                 found = True
