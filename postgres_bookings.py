@@ -46,7 +46,9 @@ FAILURE_STATUS_BY_EVENT = {
 # actually set on either side - klt-web's booking_stage() always derived "started"/"ended" purely
 # from arrival_date/departure_date, never from which one of these a booking had.
 _BLOCKING_VALID_STATUSES = ['Booking confirmed']
-_BLOCKING_PROVISIONAL_STATUSES = ['Awaiting payment']
+# 'Awaiting approval' (2026-10-12): a request to book an apartment whose bookings klt-web vets,
+# waiting for staff to answer - it holds its dates with no time limit (hold_expires_at empty).
+_BLOCKING_PROVISIONAL_STATUSES = ['Awaiting payment', 'Awaiting approval']
 
 
 def _add_business_days(start, business_days):
