@@ -131,7 +131,10 @@ def revolut_booking_deposit_callback():
             # back, and whether a klt-web payment matched.
             print(f"booking route: {event} order={order_id} tagged={tagged} matched={found}", flush=True)
 
-            if not found and tagged:
+            # A cancellation of an order klt-web does not hold is only logged: no money moved, and
+            # clearing the 560 pending orders klt-web's own test runs had left on the account
+            # (2026-10-20) would otherwise have sent one email each.
+            if not found and tagged and event != 'ORDER_CANCELLED':
                 _contact_self_for_error(f"No booking payment found for order_id: {order_id}", request.data.decode('utf-8'), dict(request.headers))
 
     except Exception as e:
