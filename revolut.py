@@ -1,8 +1,13 @@
 import hashlib
 import hmac
+
+import requests
 from werkzeug.datastructures import Headers
 
 from correspondence.self.functions import contact_self
+from default.settings import REVOLUT_MERCHANT_API_SECRET_KEY
+
+MERCHANT_ORDER_URL = 'https://merchant.revolut.com/api/1.0/orders/{}'
 
 
 def verify_revolut_payload_signature(headers: Headers, raw_data: bytes, signing_secret: str) -> bool:
@@ -31,3 +36,22 @@ def log_invalid_revolut_callback(timestamp, payload_to_sign, signature, received
             f"Received signature: {received_signature}"
         ),
     )
+
+
+def revolut_order_state(order_id: str) -> str | None:
+    """The order's state as Revolut itself holds it ('completed', 'pending', 'cancelled', ...), or
+    None when it cannot be read. A signed webhook is not taken at its word where money is concerned
+    (2026-10-22, after Railway's environment-variable breach exposed the signing secret): the
+    booking route only records ORDER_COMPLETED once Revolut confirms the order really is
+    completed, so a leaked secret alone can never mark an unpaid booking paid."""
+    try:
+        response = requests.get(
+            MERCHANT_ORDER_URL.format(order_id),
+            headers={'Authorization': f'Bearer {REVOLUT_MERCHANT_API_SECRET_KEY}'}, timeout=15,
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    state = response.json().get('state')
+    return state.lower() if isinstance(state, str) else None

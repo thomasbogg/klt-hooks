@@ -4,7 +4,7 @@ from flask import Flask, request
 from markupsafe import escape
 import json
 import os
-from revolut import verify_revolut_payload_signature
+from revolut import revolut_order_state, verify_revolut_payload_signature
 from default.settings import (
     REVOLUT_BOOKING_DEPOSIT_WEBHOOK_SIGNING_KEY,
     REVOLUT_BUSINESS_TRANSFER_WEBHOOK_SIGNING_KEY, WISE_WEBHOOK_PUBLIC_KEY,
@@ -96,6 +96,20 @@ def revolut_booking_deposit_callback():
                 if not found:
                     found = mark_owner_invoice_in_progress(order_id, event)
             elif event == 'ORDER_COMPLETED':
+                # Paid only once Revolut itself says so (revolut_order_state's docstring). Unreadable:
+                # answer 503 so Revolut sends the event again. Readable but not completed: a forged or
+                # garbled event - nothing is marked paid, and staff are told.
+                state = revolut_order_state(order_id)
+                if state is None:
+                    print(f"booking route: {event} order={order_id} not confirmed - Revolut order unreadable, asking for a retry", flush=True)
+                    return ('', 503)
+                if state != 'completed':
+                    _contact_self_for_error(
+                        f"ORDER_COMPLETED received for order {order_id}, but Revolut reports the order as '{state}'. "
+                        f"Nothing was marked paid. If the guest really paid, check the order in Revolut Business.",
+                        request.data.decode('utf-8'), dict(request.headers),
+                    )
+                    return ('', 204)
                 result = mark_payment_paid(order_id)
                 found = result != 'not_found'
                 if result == 'conflict':
