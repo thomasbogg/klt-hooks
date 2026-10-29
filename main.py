@@ -175,6 +175,17 @@ def revolut_business_transfer_callback():
             payload = json.loads(request.data)
             transfer_id = payload.get('data', {}).get('id')
             state = payload.get('data', {}).get('new_state')
+            request_id = payload.get('data', {}).get('request_id') or ''
+
+            # Revolut sends this event for every transaction on the business account, not only
+            # klt-web's. klt-web's own transfers carry a request_id of payout-<reference> or
+            # month-end-<invoice>-<currency> (finance/payouts_revolut.py); anything else - a
+            # transfer made in the Revolut app, say - is only logged. The first production
+            # webhook (2026-10-29) was one of those and emailed a false alarm.
+            if not request_id.startswith(('payout-', 'month-end-')):
+                print(f"business transfer route: {state} transaction={transfer_id} "
+                      f"request_id={request_id} - not sent by klt-web, ignored", flush=True)
+                return ('', 204)
 
             if state == 'completed':
                 found = mark_transfer_paid(transfer_id)
